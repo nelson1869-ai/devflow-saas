@@ -1,6 +1,10 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 
 type ProjectStatus = "Active" | "Planning" | "Completed";
+type FilterOption = "All" | ProjectStatus;
 
 type Project = Readonly<{
   id: string;
@@ -42,6 +46,13 @@ const statusStyles: Readonly<Record<ProjectStatus, string>> = {
   Planning: "border-amber-500/30 bg-amber-500/10 text-amber-400",
   Completed: "border-slate-500/30 bg-slate-500/10 text-slate-400",
 };
+
+const filterOptions: readonly FilterOption[] = [
+  "All",
+  "Active",
+  "Planning",
+  "Completed",
+];
 
 function ProjectMetrics({
   projects,
@@ -123,6 +134,13 @@ function ProjectCard({ project }: { readonly project: Project }) {
 }
 
 export default function ProjectsPage() {
+  const [selectedFilter, setSelectedFilter] = useState<FilterOption>("All");
+
+  const filteredProjects =
+    selectedFilter === "All"
+      ? initialProjects
+      : initialProjects.filter((project) => project.status === selectedFilter);
+
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-16 text-slate-100 sm:px-8">
       <div className="mx-auto max-w-5xl space-y-12">
@@ -155,16 +173,59 @@ export default function ProjectsPage() {
 
         <ProjectMetrics projects={initialProjects} />
 
-        <section aria-labelledby="projects-list-heading">
-          <h2 id="projects-list-heading" className="sr-only">
-            Active Workspace Projects
-          </h2>
+        <section aria-labelledby="projects-list-heading" className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+            <h2
+              id="projects-list-heading"
+              className="text-lg font-semibold text-white"
+            >
+              Workspace Projects
+            </h2>
 
-          <ul className="grid gap-6 md:grid-cols-3">
-            {initialProjects.map((project) => (
-              <ProjectCard key={project.id} project={project} />
-            ))}
-          </ul>
+            {/* Status Filter Buttons */}
+            <div
+              role="tablist"
+              aria-label="Filter projects by status"
+              className="flex flex-wrap gap-2"
+            >
+              {filterOptions.map((option) => {
+                const isSelected = selectedFilter === option;
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    onClick={() => setSelectedFilter(option)}
+                    className={[
+                      "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400",
+                      isSelected
+                        ? "bg-cyan-400 text-slate-950 shadow-sm"
+                        : "border border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700 hover:text-white",
+                    ].join(" ")}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Projects List or Empty State */}
+          {filteredProjects.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-800 p-12 text-center">
+              <p className="text-sm font-medium text-slate-300">
+                No projects found with status &ldquo;{selectedFilter}&rdquo;.
+              </p>
+            </div>
+          ) : (
+            <ul className="grid gap-6 md:grid-cols-3">
+              {filteredProjects.map((project) => (
+                <ProjectCard key={project.id} project={project} />
+              ))}
+            </ul>
+          )}
         </section>
       </div>
     </main>

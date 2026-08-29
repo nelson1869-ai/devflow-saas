@@ -29,19 +29,24 @@ const capabilities: readonly Capability[] = [
 
 function CapabilityItem({ title, description }: CapabilityItemProps) {
   return (
-    <li>
-      <h3>{title}</h3>
-      <p>{description}</p>
+    <li className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+      <h3 className="text-lg font-semibold text-white">{title}</h3>
+      <p className="mt-3 text-sm leading-6 text-slate-300">{description}</p>
     </li>
   );
 }
 
 function WorkflowCapabilities() {
   return (
-    <section aria-labelledby="capabilities-heading">
-      <h2 id="capabilities-heading">Start with the workflow essentials</h2>
+    <section className="space-y-8" aria-labelledby="capabilities-heading">
+      <h2
+        id="capabilities-heading"
+        className="text-2xl font-semibold tracking-tight text-white sm:text-3xl"
+      >
+        Start with the workflow essentials
+      </h2>
 
-      <ul>
+      <ul className="grid gap-6 md:grid-cols-3">
         {capabilities.map((capability) => (
           <CapabilityItem
             key={capability.id}
@@ -56,14 +61,24 @@ function WorkflowCapabilities() {
 
 export default function DevFlowPage() {
   return (
-    <main>
-      <header>
-        <p>Developer workflow platform</p>
-        <h1>DevFlow</h1>
-        <p>Plan projects, organize tasks, and keep your team moving.</p>
-      </header>
+    <main className="min-h-screen bg-slate-950 px-6 py-16 text-slate-100 sm:px-8">
+      <div className="mx-auto max-w-5xl space-y-16">
+        <header className="max-w-3xl space-y-6">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">
+            Developer workflow platform
+          </p>
 
-      <WorkflowCapabilities />
+          <h1 className="text-5xl font-bold tracking-tight text-white sm:text-6xl">
+            DevFlow
+          </h1>
+
+          <p className="max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">
+            Plan projects, organize tasks, and keep your team moving.
+          </p>
+        </header>
+
+        <WorkflowCapabilities />
+      </div>
     </main>
   );
 }

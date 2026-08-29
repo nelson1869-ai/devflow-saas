@@ -43,6 +43,52 @@ const statusStyles: Readonly<Record<ProjectStatus, string>> = {
   Completed: "border-slate-500/30 bg-slate-500/10 text-slate-400",
 };
 
+function ProjectMetrics({
+  projects,
+}: {
+  readonly projects: readonly Project[];
+}) {
+  const total = projects.length;
+  const active = projects.filter((p) => p.status === "Active").length;
+  const planning = projects.filter((p) => p.status === "Planning").length;
+  const completed = projects.filter((p) => p.status === "Completed").length;
+
+  return (
+    <section
+      aria-labelledby="metrics-heading"
+      className="grid grid-cols-2 gap-4 sm:grid-cols-4"
+    >
+      <h2 id="metrics-heading" className="sr-only">
+        Project Metrics Summary
+      </h2>
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+        <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+          Total Projects
+        </p>
+        <p className="mt-1 text-2xl font-bold text-white">{total}</p>
+      </div>
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+        <p className="text-xs font-medium text-emerald-400 uppercase tracking-wider">
+          Active
+        </p>
+        <p className="mt-1 text-2xl font-bold text-white">{active}</p>
+      </div>
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+        <p className="text-xs font-medium text-amber-400 uppercase tracking-wider">
+          Planning
+        </p>
+        <p className="mt-1 text-2xl font-bold text-white">{planning}</p>
+      </div>
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+        <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+          Completed
+        </p>
+        <p className="mt-1 text-2xl font-bold text-white">{completed}</p>
+      </div>
+    </section>
+  );
+}
+
 function ProjectCard({ project }: { readonly project: Project }) {
   return (
     <li className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
@@ -67,7 +113,7 @@ function ProjectCard({ project }: { readonly project: Project }) {
         </span>
       </div>
 
-      <h2 className="mt-4 text-xl font-semibold text-white">{project.name}</h2>
+      <h3 className="mt-4 text-xl font-semibold text-white">{project.name}</h3>
 
       <p className="mt-2 text-sm leading-6 text-slate-300">
         {project.description}
@@ -106,6 +152,8 @@ export default function ProjectsPage() {
             Manage your workspace projects and track delivery milestones.
           </p>
         </header>
+
+        <ProjectMetrics projects={initialProjects} />
 
         <section aria-labelledby="projects-list-heading">
           <h2 id="projects-list-heading" className="sr-only">

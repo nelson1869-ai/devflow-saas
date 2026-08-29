@@ -2,17 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-
-type ProjectStatus = "Active" | "Planning" | "Completed";
-type FilterOption = "All" | ProjectStatus;
-
-type Project = Readonly<{
-  id: string;
-  name: string;
-  key: string;
-  description: string;
-  status: ProjectStatus;
-}>;
+import type { Project, ProjectStatus, FilterOption } from "./types";
 
 const initialProjects: readonly Project[] = [
   {

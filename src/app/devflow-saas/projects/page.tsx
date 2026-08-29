@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import type { Project, FilterOption } from "./types";
+import type { Project, ProjectStatus, FilterOption } from "./types";
 import { ProjectCard } from "./ProjectCard";
 import { ProjectMetrics } from "./ProjectMetrics";
 
@@ -41,10 +41,56 @@ const filterOptions: readonly FilterOption[] = [
 ];
 
 export default function ProjectsPage() {
+  const [projects, setProjects] = useState<readonly Project[]>(initialProjects);
   const [selectedFilter, setSelectedFilter] = useState<FilterOption>("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
-  const filteredProjects = initialProjects.filter((project) => {
+  // Form State
+  const [name, setName] = useState("");
+  const [key, setKey] = useState("");
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState<ProjectStatus>("Active");
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const handleCreateProject = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFormError(null);
+
+    const trimmedName = name.trim();
+    const trimmedKey = key.trim().toUpperCase();
+    const trimmedDescription = description.trim();
+
+    if (!trimmedName || !trimmedKey || !trimmedDescription) {
+      setFormError("All fields are required.");
+      return;
+    }
+
+    if (trimmedKey.length < 2 || trimmedKey.length > 6) {
+      setFormError("Project key must be between 2 and 6 characters.");
+      return;
+    }
+
+    const newProject: Project = {
+      id: `proj-${Date.now()}`,
+      name: trimmedName,
+      key: trimmedKey,
+      description: trimmedDescription,
+      status,
+    };
+
+    // Immutable state update
+    setProjects((prev) => [newProject, ...prev]);
+
+    // Reset Form
+    setName("");
+    setKey("");
+    setDescription("");
+    setStatus("Active");
+    setIsFormOpen(false);
+  };
+
+  const filteredProjects = projects.filter((project) => {
     const matchesFilter =
       selectedFilter === "All" || project.status === selectedFilter;
     const query = searchQuery.trim().toLowerCase();
@@ -78,16 +124,152 @@ export default function ProjectsPage() {
           </Link>
         </nav>
 
-        <header className="space-y-4">
-          <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
-            Projects
-          </h1>
-          <p className="text-lg text-slate-300">
-            Manage your workspace projects and track delivery milestones.
-          </p>
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
+              Projects
+            </h1>
+            <p className="text-lg text-slate-300">
+              Manage your workspace projects and track delivery milestones.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsFormOpen((prev) => !prev)}
+            className={[
+              "inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition",
+              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400",
+              isFormOpen
+                ? "border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+                : "bg-cyan-400 text-slate-950 hover:bg-cyan-300",
+            ].join(" ")}
+          >
+            {isFormOpen ? "Cancel" : "+ New Project"}
+          </button>
         </header>
 
-        <ProjectMetrics projects={initialProjects} />
+        {/* Collapsible Create Project Form */}
+        {isFormOpen && (
+          <section
+            aria-labelledby="create-project-heading"
+            className="rounded-2xl border border-cyan-500/30 bg-slate-900/90 p-6 shadow-xl"
+          >
+            <h2
+              id="create-project-heading"
+              className="text-lg font-semibold text-white"
+            >
+              Create New Project
+            </h2>
+
+            {formError && (
+              <div
+                role="alert"
+                className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-300"
+              >
+                {formError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateProject} className="mt-6 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="project-name"
+                    className="block text-xs font-medium text-slate-300"
+                  >
+                    Project Name
+                  </label>
+                  <input
+                    id="project-name"
+                    type="text"
+                    required
+                    placeholder="e.g. Billing Service"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="project-key"
+                    className="block text-xs font-medium text-slate-300"
+                  >
+                    Project Key (2-6 chars)
+                  </label>
+                  <input
+                    id="project-key"
+                    type="text"
+                    required
+                    maxLength={6}
+                    placeholder="e.g. BILL"
+                    value={key}
+                    onChange={(e) => setKey(e.target.value.toUpperCase())}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm uppercase text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="project-description"
+                    className="block text-xs font-medium text-slate-300"
+                  >
+                    Description
+                  </label>
+                  <input
+                    id="project-description"
+                    type="text"
+                    required
+                    placeholder="Short description of deliverables"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="project-status"
+                    className="block text-xs font-medium text-slate-300"
+                  >
+                    Initial Status
+                  </label>
+                  <select
+                    id="project-status"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as ProjectStatus)}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Planning">Planning</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFormOpen(false)}
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-cyan-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 focus-visible:outline-2 focus-visible:outline-cyan-400"
+                >
+                  Create Project
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        <ProjectMetrics projects={projects} />
 
         <section aria-labelledby="projects-list-heading" className="space-y-6">
           <div className="flex flex-col gap-4 border-b border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -99,7 +281,7 @@ export default function ProjectsPage() {
                 Workspace Projects
               </h2>
               <span className="text-xs text-slate-400">
-                ({filteredProjects.length} of {initialProjects.length})
+                ({filteredProjects.length} of {projects.length})
               </span>
             </div>
 

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 type CapabilityItemProps = Readonly<{
   title: string;
   description: string;
@@ -59,6 +61,45 @@ function WorkflowCapabilities() {
   );
 }
 
+const primaryButtonClass = [
+  "inline-flex",
+  "items-center",
+  "justify-center",
+  "rounded-lg",
+  "bg-cyan-400",
+  "px-5",
+  "py-3",
+  "text-sm",
+  "font-semibold",
+  "text-slate-950",
+  "transition",
+  "hover:bg-cyan-300",
+  "focus-visible:outline-2",
+  "focus-visible:outline-offset-2",
+  "focus-visible:outline-cyan-400",
+].join(" ");
+
+const secondaryButtonClass = [
+  "inline-flex",
+  "items-center",
+  "justify-center",
+  "rounded-lg",
+  "border",
+  "border-slate-700",
+  "bg-slate-900/50",
+  "px-5",
+  "py-3",
+  "text-sm",
+  "font-semibold",
+  "text-slate-200",
+  "transition",
+  "hover:border-slate-600",
+  "hover:bg-slate-800",
+  "focus-visible:outline-2",
+  "focus-visible:outline-offset-2",
+  "focus-visible:outline-slate-400",
+].join(" ");
+
 export default function DevFlowPage() {
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-16 text-slate-100 sm:px-8">
@@ -75,6 +116,15 @@ export default function DevFlowPage() {
           <p className="max-w-2xl text-lg leading-8 text-slate-300 sm:text-xl">
             Plan projects, organize tasks, and keep your team moving.
           </p>
+
+          <div className="flex flex-wrap gap-4 pt-2">
+            <Link href="/devflow-saas/projects" className={primaryButtonClass}>
+              Get started
+            </Link>
+            <Link href="#capabilities-heading" className={secondaryButtonClass}>
+              Explore features
+            </Link>
+          </div>
         </header>
 
         <WorkflowCapabilities />

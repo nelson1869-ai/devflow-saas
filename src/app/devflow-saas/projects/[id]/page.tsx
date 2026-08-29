@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Project, ProjectStatus } from "../types";
 import type { Task } from "../../tasks/types";
-import { TaskCard } from "../../tasks/TaskCard";
+import { ProjectTasksView } from "./ProjectTasksView";
 
 type ProjectDetailPageProps = Readonly<{
   params: Promise<{ id: string }>;
@@ -86,7 +86,6 @@ const statusStyles: Readonly<Record<ProjectStatus, string>> = {
 export default async function ProjectDetailPage({
   params,
 }: ProjectDetailPageProps) {
-  // Modern Next.js async params resolution
   const { id } = await params;
   const project = sampleProjects.find((p) => p.id === id);
 
@@ -111,7 +110,6 @@ export default async function ProjectDetailPage({
     );
   }
 
-  // Filter tasks belonging to this project
   const projectTasks = sampleTasks.filter((task) => task.projectId === id);
 
   return (
@@ -150,35 +148,8 @@ export default async function ProjectDetailPage({
           </p>
         </header>
 
-        {/* Project Tasks Section */}
-        <section aria-labelledby="tasks-section-heading" className="space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <h2
-              id="tasks-section-heading"
-              className="text-lg font-semibold text-white"
-            >
-              Project Tasks & Issues
-            </h2>
-            <span className="text-xs text-slate-400">
-              {projectTasks.length}{" "}
-              {projectTasks.length === 1 ? "task" : "tasks"} registered
-            </span>
-          </div>
-
-          {projectTasks.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-800 p-10 text-center">
-              <p className="text-sm text-slate-400">
-                No tasks have been added to this project yet.
-              </p>
-            </div>
-          ) : (
-            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {projectTasks.map((task) => (
-                <TaskCard key={task.id} task={task} />
-              ))}
-            </ul>
-          )}
-        </section>
+        {/* Interactive Client Island for Tasks */}
+        <ProjectTasksView projectId={project.id} initialTasks={projectTasks} />
       </div>
     </main>
   );

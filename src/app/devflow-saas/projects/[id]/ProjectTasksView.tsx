@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import type { Task, TaskPriority, TaskStatus } from "../../tasks/types";
 import { TaskCard } from "../../tasks/TaskCard";
-import { createTaskAction } from "../../lib/actions";
+import { createTaskAction, updateTaskStatusAction } from "../../lib/actions";
 
 type ProjectTasksViewProps = Readonly<{
   projectId: string;
@@ -62,7 +62,7 @@ export function ProjectTasksView({
   const [assigneeName, setAssigneeName] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Keep tasks synchronized when server revalidates props
+  // Synchronize tasks when server revalidates
   if (
     initialTasks !== tasks &&
     !isPending &&
@@ -92,7 +92,7 @@ export function ProjectTasksView({
     formData.append("priority", priority);
     formData.append("assigneeName", trimmedAssignee);
 
-    // Optimistic immediate UI update
+    // Optimistic UI update
     const optimisticTask: Task = {
       id: `task-${Date.now()}`,
       projectId,
@@ -108,16 +108,31 @@ export function ProjectTasksView({
       const res = await createTaskAction(formData);
       if (!res.success) {
         setFormError(res.error || "Failed to save task.");
-        // Rollback on failure
         setTasks((prev) => prev.filter((t) => t.id !== optimisticTask.id));
       } else {
-        // Reset Form
         setTitle("");
         setDescription("");
         setStatus("Todo");
         setPriority("Medium");
         setAssigneeName("");
         setIsFormOpen(false);
+      }
+    });
+  };
+
+  const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
+    // Instant optimistic update in UI
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId ? { ...task, status: newStatus } : task,
+      ),
+    );
+
+    startTransition(async () => {
+      const res = await updateTaskStatusAction(taskId, newStatus, projectId);
+      if (!res.success) {
+        // Rollback on failure
+        setTasks(initialTasks);
       }
     });
   };
@@ -384,7 +399,11 @@ export function ProjectTasksView({
                   ) : (
                     <ul className="space-y-3">
                       {columnTasks.map((task) => (
-                        <TaskCard key={task.id} task={task} />
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          onStatusChange={handleStatusChange}
+                        />
                       ))}
                     </ul>
                   )}
@@ -403,7 +422,11 @@ export function ProjectTasksView({
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredTasks.map((task) => (
-            <TaskCard key={task.id} task={task} />
+            <TaskCard
+              key={task.id}
+              task={task}
+              onStatusChange={handleStatusChange}
+            />
           ))}
         </ul>
       )}

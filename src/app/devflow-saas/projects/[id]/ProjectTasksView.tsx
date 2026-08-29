@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useTransition } from "react";
 import type { Task, TaskPriority, TaskStatus } from "../../tasks/types";
 import { TaskCard } from "../../tasks/TaskCard";
+import { createTaskAction } from "../../lib/actions";
 
 type ProjectTasksViewProps = Readonly<{
   projectId: string;
@@ -51,6 +52,7 @@ export function ProjectTasksView({
   const [selectedStatus, setSelectedStatus] = useState<TaskFilter>("All");
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   // Form State
   const [title, setTitle] = useState("");
@@ -60,7 +62,16 @@ export function ProjectTasksView({
   const [assigneeName, setAssigneeName] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  const handleCreateTask = (e: FormEvent<HTMLFormElement>) => {
+  // Keep tasks synchronized when server revalidates props
+  if (
+    initialTasks !== tasks &&
+    !isPending &&
+    initialTasks.length > tasks.length
+  ) {
+    setTasks(initialTasks);
+  }
+
+  const handleCreateTask = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
 
@@ -73,7 +84,16 @@ export function ProjectTasksView({
       return;
     }
 
-    const newTask: Task = {
+    const formData = new FormData();
+    formData.append("projectId", projectId);
+    formData.append("title", trimmedTitle);
+    formData.append("description", trimmedDesc);
+    formData.append("status", status);
+    formData.append("priority", priority);
+    formData.append("assigneeName", trimmedAssignee);
+
+    // Optimistic immediate UI update
+    const optimisticTask: Task = {
       id: `task-${Date.now()}`,
       projectId,
       title: trimmedTitle,
@@ -82,16 +102,24 @@ export function ProjectTasksView({
       priority,
       assigneeName: trimmedAssignee,
     };
+    setTasks((prev) => [optimisticTask, ...prev]);
 
-    setTasks((prev) => [newTask, ...prev]);
-
-    // Reset Form
-    setTitle("");
-    setDescription("");
-    setStatus("Todo");
-    setPriority("Medium");
-    setAssigneeName("");
-    setIsFormOpen(false);
+    startTransition(async () => {
+      const res = await createTaskAction(formData);
+      if (!res.success) {
+        setFormError(res.error || "Failed to save task.");
+        // Rollback on failure
+        setTasks((prev) => prev.filter((t) => t.id !== optimisticTask.id));
+      } else {
+        // Reset Form
+        setTitle("");
+        setDescription("");
+        setStatus("Todo");
+        setPriority("Medium");
+        setAssigneeName("");
+        setIsFormOpen(false);
+      }
+    });
   };
 
   const filteredTasks = tasks.filter((task) => {
@@ -112,7 +140,7 @@ export function ProjectTasksView({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* View Mode Toggle (Kanban / Grid) */}
+          {/* View Mode Toggle */}
           <div className="inline-flex rounded-lg border border-slate-800 bg-slate-900/60 p-0.5">
             <button
               type="button"
@@ -140,7 +168,7 @@ export function ProjectTasksView({
             </button>
           </div>
 
-          {/* Status Filter Tabs (only shown in Grid mode) */}
+          {/* Status Filter Tabs (Grid Mode) */}
           {viewMode === "grid" && (
             <div
               role="tablist"
@@ -215,10 +243,11 @@ export function ProjectTasksView({
                 id="task-title"
                 type="text"
                 required
+                disabled={isPending}
                 placeholder="e.g. Set up JWT authentication"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
               />
             </div>
 
@@ -233,10 +262,11 @@ export function ProjectTasksView({
                 id="task-description"
                 rows={2}
                 required
+                disabled={isPending}
                 placeholder="Detailed acceptance criteria..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
               />
             </div>
 
@@ -251,6 +281,7 @@ export function ProjectTasksView({
                 <select
                   id="task-status"
                   value={status}
+                  disabled={isPending}
                   onChange={(e) => setStatus(e.target.value as TaskStatus)}
                   className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
                 >
@@ -271,6 +302,7 @@ export function ProjectTasksView({
                 <select
                   id="task-priority"
                   value={priority}
+                  disabled={isPending}
                   onChange={(e) => setPriority(e.target.value as TaskPriority)}
                   className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
                 >
@@ -292,10 +324,11 @@ export function ProjectTasksView({
                   id="task-assignee"
                   type="text"
                   required
+                  disabled={isPending}
                   placeholder="e.g. Alex Rivera"
                   value={assigneeName}
                   onChange={(e) => setAssigneeName(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
                 />
               </div>
             </div>
@@ -304,15 +337,16 @@ export function ProjectTasksView({
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-cyan-400"
+                className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 focus-visible:outline-2 focus-visible:outline-cyan-400"
+                disabled={isPending}
+                className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-50"
               >
-                Save Task
+                {isPending ? "Saving to Database..." : "Save Task"}
               </button>
             </div>
           </form>

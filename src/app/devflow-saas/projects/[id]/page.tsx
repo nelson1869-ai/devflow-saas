@@ -1,80 +1,11 @@
 import Link from "next/link";
-import type { Project, ProjectStatus } from "../types";
-import type { Task } from "../../tasks/types";
+import { getProjectById, getTasksByProjectId } from "../../lib/queries";
+import type { ProjectStatus } from "../types";
 import { ProjectTasksView } from "./ProjectTasksView";
 
 type ProjectDetailPageProps = Readonly<{
   params: Promise<{ id: string }>;
 }>;
-
-const sampleProjects: readonly Project[] = [
-  {
-    id: "proj-1",
-    name: "Platform Core APIs",
-    key: "CORE",
-    description:
-      "Core authentication, multi-tenant isolation, and rate limiting services.",
-    status: "Active",
-  },
-  {
-    id: "proj-2",
-    name: "Customer Dashboard v2",
-    key: "DASH",
-    description:
-      "Real-time analytics and workflow telemetry dashboard for engineering teams.",
-    status: "Planning",
-  },
-  {
-    id: "proj-3",
-    name: "CLI Tooling & SDKs",
-    key: "CLI",
-    description:
-      "Developer command-line interface and client libraries for DevFlow APIs.",
-    status: "Completed",
-  },
-];
-
-const sampleTasks: readonly Task[] = [
-  {
-    id: "task-101",
-    projectId: "proj-1",
-    title: "Implement JWT Session Verification",
-    description:
-      "Validate session cookies and decode tenant claims in middleware.",
-    status: "In Progress",
-    priority: "High",
-    assigneeName: "Alex Rivera",
-  },
-  {
-    id: "task-102",
-    projectId: "proj-1",
-    title: "Configure Redis Rate Limiter",
-    description: "Apply 100 req/min bucket per API key for external traffic.",
-    status: "Todo",
-    priority: "Urgent",
-    assigneeName: "Devin Zhao",
-  },
-  {
-    id: "task-103",
-    projectId: "proj-1",
-    title: "Database Isolation Unit Tests",
-    description:
-      "Write integration tests ensuring zero data leak across organizations.",
-    status: "Review",
-    priority: "Medium",
-    assigneeName: "Sarah Connor",
-  },
-  {
-    id: "task-201",
-    projectId: "proj-2",
-    title: "Design Telemetry Chart Wireframes",
-    description:
-      "Draft Figma components for latency percentiles and error rates.",
-    status: "In Progress",
-    priority: "Medium",
-    assigneeName: "Maya Lin",
-  },
-];
 
 const statusStyles: Readonly<Record<ProjectStatus, string>> = {
   Active: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
@@ -86,7 +17,9 @@ export default async function ProjectDetailPage({
   params,
 }: ProjectDetailPageProps) {
   const { id } = await params;
-  const project = sampleProjects.find((p) => p.id === id);
+
+  // Real database queries from SQLite
+  const project = getProjectById(id);
 
   if (!project) {
     return (
@@ -101,7 +34,8 @@ export default async function ProjectDetailPage({
           <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-8 text-center">
             <h1 className="text-xl font-bold text-white">Project Not Found</h1>
             <p className="mt-2 text-sm text-slate-300">
-              No project exists with identifier &ldquo;{id}&rdquo;.
+              No project exists in the database with identifier &ldquo;{id}
+              &rdquo;.
             </p>
           </div>
         </div>
@@ -109,7 +43,7 @@ export default async function ProjectDetailPage({
     );
   }
 
-  const projectTasks = sampleTasks.filter((task) => task.projectId === id);
+  const projectTasks = getTasksByProjectId(project.id);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
@@ -147,7 +81,7 @@ export default async function ProjectDetailPage({
           </p>
         </header>
 
-        {/* Interactive Client Island for Tasks */}
+        {/* Real SQLite Tasks */}
         <ProjectTasksView projectId={project.id} initialTasks={projectTasks} />
       </div>
     </main>

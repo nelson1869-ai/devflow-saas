@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import Link from "next/link";
 import type { Project, ProjectStatus, FilterOption } from "./types";
 import { ProjectCard } from "./ProjectCard";
 import { ProjectMetrics } from "./ProjectMetrics";
@@ -79,7 +78,6 @@ export default function ProjectsPage() {
       status,
     };
 
-    // Immutable state update
     setProjects((prev) => [newProject, ...prev]);
 
     // Reset Form
@@ -104,33 +102,16 @@ export default function ProjectsPage() {
   });
 
   return (
-    <main className="min-h-screen bg-slate-950 px-6 py-16 text-slate-100 sm:px-8">
-      <div className="mx-auto max-w-5xl space-y-12">
-        <nav aria-label="Breadcrumb">
-          <Link
-            href="/devflow-saas"
-            className={[
-              "text-sm",
-              "font-medium",
-              "text-cyan-400",
-              "transition",
-              "hover:text-cyan-300",
-              "focus-visible:outline-2",
-              "focus-visible:outline-offset-2",
-              "focus-visible:outline-cyan-400",
-            ].join(" ")}
-          >
-            &larr; Back to DevFlow Home
-          </Link>
-        </nav>
-
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-2">
-            <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
+    <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
+      <div className="space-y-10">
+        <header className="flex flex-col gap-4 border-b border-slate-800/80 pb-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
               Projects
             </h1>
-            <p className="text-lg text-slate-300">
-              Manage your workspace projects and track delivery milestones.
+            <p className="text-sm text-slate-400">
+              Manage your engineering projects, milestones, and task
+              deliverables.
             </p>
           </div>
 
@@ -138,11 +119,11 @@ export default function ProjectsPage() {
             type="button"
             onClick={() => setIsFormOpen((prev) => !prev)}
             className={[
-              "inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition",
-              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400",
+              "inline-flex items-center justify-center rounded-lg px-4 py-2 text-xs font-semibold transition",
+              "focus-visible:outline-2 focus-visible:outline-cyan-400",
               isFormOpen
-                ? "border border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
-                : "bg-cyan-400 text-slate-950 hover:bg-cyan-300",
+                ? "border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                : "bg-cyan-400 text-slate-950 hover:bg-cyan-300 shadow-sm",
             ].join(" ")}
           >
             {isFormOpen ? "Cancel" : "+ New Project"}
@@ -157,7 +138,7 @@ export default function ProjectsPage() {
           >
             <h2
               id="create-project-heading"
-              className="text-lg font-semibold text-white"
+              className="text-base font-semibold text-white"
             >
               Create New Project
             </h2>
@@ -165,13 +146,13 @@ export default function ProjectsPage() {
             {formError && (
               <div
                 role="alert"
-                className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-300"
+                className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
               >
                 {formError}
               </div>
             )}
 
-            <form onSubmit={handleCreateProject} className="mt-6 space-y-4">
+            <form onSubmit={handleCreateProject} className="mt-4 space-y-4">
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="sm:col-span-2">
                   <label
@@ -184,7 +165,7 @@ export default function ProjectsPage() {
                     id="project-name"
                     type="text"
                     required
-                    placeholder="e.g. Billing Service"
+                    placeholder="e.g. Platform Core APIs"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
@@ -196,14 +177,14 @@ export default function ProjectsPage() {
                     htmlFor="project-key"
                     className="block text-xs font-medium text-slate-300"
                   >
-                    Project Key (2-6 chars)
+                    Key (2-6 chars)
                   </label>
                   <input
                     id="project-key"
                     type="text"
                     required
                     maxLength={6}
-                    placeholder="e.g. BILL"
+                    placeholder="e.g. CORE"
                     value={key}
                     onChange={(e) => setKey(e.target.value.toUpperCase())}
                     className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm uppercase text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
@@ -223,7 +204,7 @@ export default function ProjectsPage() {
                     id="project-description"
                     type="text"
                     required
-                    placeholder="Short description of deliverables"
+                    placeholder="Brief description of deliverables..."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
@@ -254,13 +235,13 @@ export default function ProjectsPage() {
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
-                  className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-cyan-400"
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 focus-visible:outline-2 focus-visible:outline-cyan-400"
+                  className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300"
                 >
                   Create Project
                 </button>
@@ -276,7 +257,7 @@ export default function ProjectsPage() {
             <div className="flex items-center gap-3">
               <h2
                 id="projects-list-heading"
-                className="text-lg font-semibold text-white"
+                className="text-base font-semibold text-white"
               >
                 Workspace Projects
               </h2>
@@ -286,7 +267,7 @@ export default function ProjectsPage() {
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              {/* Controlled Search Input */}
+              {/* Search */}
               <div className="relative">
                 <label htmlFor="project-search" className="sr-only">
                   Search projects
@@ -301,11 +282,11 @@ export default function ProjectsPage() {
                 />
               </div>
 
-              {/* Status Filter Buttons */}
+              {/* Filter Tabs */}
               <div
                 role="tablist"
                 aria-label="Filter projects by status"
-                className="flex flex-wrap gap-2"
+                className="flex flex-wrap gap-1.5"
               >
                 {filterOptions.map((option) => {
                   const isSelected = selectedFilter === option;
@@ -317,8 +298,8 @@ export default function ProjectsPage() {
                       aria-selected={isSelected}
                       onClick={() => setSelectedFilter(option)}
                       className={[
-                        "rounded-lg px-3 py-1.5 text-xs font-medium transition",
-                        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400",
+                        "rounded-lg px-2.5 py-1 text-xs font-medium transition",
+                        "focus-visible:outline-2 focus-visible:outline-cyan-400",
                         isSelected
                           ? "bg-cyan-400 text-slate-950 shadow-sm"
                           : "border border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700 hover:text-white",
@@ -332,7 +313,7 @@ export default function ProjectsPage() {
             </div>
           </div>
 
-          {/* Projects List or Empty State */}
+          {/* List or Empty State */}
           {filteredProjects.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-800 p-12 text-center">
               <p className="text-sm font-medium text-slate-300">
@@ -345,7 +326,7 @@ export default function ProjectsPage() {
                     setSelectedFilter("All");
                     setSearchQuery("");
                   }}
-                  className="mt-3 inline-flex items-center text-xs font-semibold text-cyan-400 hover:text-cyan-300 focus-visible:outline-2 focus-visible:outline-cyan-400"
+                  className="mt-3 inline-flex items-center text-xs font-semibold text-cyan-400 hover:text-cyan-300"
                 >
                   Clear search and filters
                 </button>

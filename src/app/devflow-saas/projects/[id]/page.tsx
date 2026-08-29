@@ -7,7 +7,6 @@ type ProjectDetailPageProps = Readonly<{
   params: Promise<{ id: string }>;
 }>;
 
-// Temporary lookup data (will connect to database in persistence phase)
 const sampleProjects: readonly Project[] = [
   {
     id: "proj-1",
@@ -91,11 +90,11 @@ export default async function ProjectDetailPage({
 
   if (!project) {
     return (
-      <main className="min-h-screen bg-slate-950 px-6 py-16 text-slate-100 sm:px-8">
-        <div className="mx-auto max-w-4xl space-y-6">
+      <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
+        <div className="space-y-6">
           <Link
             href="/devflow-saas/projects"
-            className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 focus-visible:outline-2 focus-visible:outline-cyan-400"
+            className="text-xs font-semibold text-cyan-400 hover:text-cyan-300"
           >
             &larr; Back to all projects
           </Link>
@@ -113,18 +112,18 @@ export default async function ProjectDetailPage({
   const projectTasks = sampleTasks.filter((task) => task.projectId === id);
 
   return (
-    <main className="min-h-screen bg-slate-950 px-6 py-16 text-slate-100 sm:px-8">
-      <div className="mx-auto max-w-4xl space-y-8">
+    <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
+      <div className="space-y-8">
         <nav aria-label="Breadcrumb">
           <Link
             href="/devflow-saas/projects"
-            className="text-xs font-semibold text-cyan-400 transition hover:text-cyan-300 focus-visible:outline-2 focus-visible:outline-cyan-400"
+            className="text-xs font-semibold text-cyan-400 transition hover:text-cyan-300"
           >
             &larr; Back to all projects
           </Link>
         </nav>
 
-        <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-8">
+        <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <span className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
               Key: {project.key}
@@ -143,7 +142,7 @@ export default async function ProjectDetailPage({
             {project.name}
           </h1>
 
-          <p className="mt-4 text-base leading-7 text-slate-300">
+          <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:text-base">
             {project.description}
           </p>
         </header>

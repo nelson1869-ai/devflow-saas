@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Project, ProjectStatus } from "./types";
 
 type ProjectCardProps = Readonly<{
@@ -12,7 +13,7 @@ const statusStyles: Readonly<Record<ProjectStatus, string>> = {
 
 export function ProjectCard({ project }: ProjectCardProps) {
   return (
-    <li className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+    <li className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 transition hover:border-slate-700">
       <div className="flex items-center justify-between gap-4">
         <span className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
           {project.key}
@@ -34,7 +35,14 @@ export function ProjectCard({ project }: ProjectCardProps) {
         </span>
       </div>
 
-      <h3 className="mt-4 text-xl font-semibold text-white">{project.name}</h3>
+      <h3 className="mt-4 text-xl font-semibold text-white">
+        <Link
+          href={`/devflow-saas/projects/${project.id}`}
+          className="transition hover:text-cyan-400 focus-visible:outline-2 focus-visible:outline-cyan-400"
+        >
+          {project.name}
+        </Link>
+      </h3>
 
       <p className="mt-2 text-sm leading-6 text-slate-300">
         {project.description}

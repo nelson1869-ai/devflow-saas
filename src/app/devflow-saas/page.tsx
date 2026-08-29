@@ -2,6 +2,17 @@ type CapabilityItemProps = Readonly<{
   label: string;
 }>;
 
+type Capability = Readonly<{
+  id: string;
+  label: string;
+}>;
+
+const capabilities: readonly Capability[] = [
+  { id: "projects", label: "Organize projects" },
+  { id: "tasks", label: "Track tasks" },
+  { id: "collaboration", label: "Collaborate with your team" },
+];
+
 function CapabilityItem({ label }: CapabilityItemProps) {
   return <li>{label}</li>;
 }
@@ -12,9 +23,9 @@ function WorkflowCapabilities() {
       <h2 id="capabilities-heading">Start with the workflow essentials</h2>
 
       <ul>
-        <CapabilityItem label="Organize projects" />
-        <CapabilityItem label="Track tasks" />
-        <CapabilityItem label="Collaborate with your team" />
+        {capabilities.map((capability) => (
+          <CapabilityItem key={capability.id} label={capability.label} />
+        ))}
       </ul>
     </section>
   );

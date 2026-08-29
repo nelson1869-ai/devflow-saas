@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Project, ProjectStatus } from "../types";
+import type { Task } from "../../tasks/types";
+import { TaskCard } from "../../tasks/TaskCard";
 
 type ProjectDetailPageProps = Readonly<{
   params: Promise<{ id: string }>;
@@ -30,6 +32,48 @@ const sampleProjects: readonly Project[] = [
     description:
       "Developer command-line interface and client libraries for DevFlow APIs.",
     status: "Completed",
+  },
+];
+
+const sampleTasks: readonly Task[] = [
+  {
+    id: "task-101",
+    projectId: "proj-1",
+    title: "Implement JWT Session Verification",
+    description:
+      "Validate session cookies and decode tenant claims in middleware.",
+    status: "In Progress",
+    priority: "High",
+    assigneeName: "Alex Rivera",
+  },
+  {
+    id: "task-102",
+    projectId: "proj-1",
+    title: "Configure Redis Rate Limiter",
+    description: "Apply 100 req/min bucket per API key for external traffic.",
+    status: "Todo",
+    priority: "Urgent",
+    assigneeName: "Devin Zhao",
+  },
+  {
+    id: "task-103",
+    projectId: "proj-1",
+    title: "Database Isolation Unit Tests",
+    description:
+      "Write integration tests ensuring zero data leak across organizations.",
+    status: "Review",
+    priority: "Medium",
+    assigneeName: "Sarah Connor",
+  },
+  {
+    id: "task-201",
+    projectId: "proj-2",
+    title: "Design Telemetry Chart Wireframes",
+    description:
+      "Draft Figma components for latency percentiles and error rates.",
+    status: "In Progress",
+    priority: "Medium",
+    assigneeName: "Maya Lin",
   },
 ];
 
@@ -67,6 +111,9 @@ export default async function ProjectDetailPage({
     );
   }
 
+  // Filter tasks belonging to this project
+  const projectTasks = sampleTasks.filter((task) => task.projectId === id);
+
   return (
     <main className="min-h-screen bg-slate-950 px-6 py-16 text-slate-100 sm:px-8">
       <div className="mx-auto max-w-4xl space-y-8">
@@ -103,8 +150,8 @@ export default async function ProjectDetailPage({
           </p>
         </header>
 
-        {/* Project Tasks Overview Placeholder */}
-        <section aria-labelledby="tasks-section-heading" className="space-y-4">
+        {/* Project Tasks Section */}
+        <section aria-labelledby="tasks-section-heading" className="space-y-6">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <h2
               id="tasks-section-heading"
@@ -112,14 +159,25 @@ export default async function ProjectDetailPage({
             >
               Project Tasks & Issues
             </h2>
-            <span className="text-xs text-slate-400">0 tasks registered</span>
+            <span className="text-xs text-slate-400">
+              {projectTasks.length}{" "}
+              {projectTasks.length === 1 ? "task" : "tasks"} registered
+            </span>
           </div>
 
-          <div className="rounded-2xl border border-dashed border-slate-800 p-10 text-center">
-            <p className="text-sm text-slate-400">
-              No tasks have been added to this project yet.
-            </p>
-          </div>
+          {projectTasks.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-800 p-10 text-center">
+              <p className="text-sm text-slate-400">
+                No tasks have been added to this project yet.
+              </p>
+            </div>
+          ) : (
+            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {projectTasks.map((task) => (
+                <TaskCard key={task.id} task={task} />
+              ))}
+            </ul>
+          )}
         </section>
       </div>
     </main>

@@ -1,20 +1,39 @@
 type CapabilityItemProps = Readonly<{
-  label: string;
+  title: string;
+  description: string;
 }>;
 
 type Capability = Readonly<{
   id: string;
-  label: string;
+  title: string;
+  description: string;
 }>;
 
 const capabilities: readonly Capability[] = [
-  { id: "projects", label: "Organize projects" },
-  { id: "tasks", label: "Track tasks" },
-  { id: "collaboration", label: "Collaborate with your team" },
+  {
+    id: "projects",
+    title: "Organize projects",
+    description: "Group related work and keep delivery goals visible.",
+  },
+  {
+    id: "tasks",
+    title: "Track tasks",
+    description: "Turn project goals into clear, trackable units of work.",
+  },
+  {
+    id: "collaboration",
+    title: "Collaborate with your team",
+    description: "Give teammates shared context on progress and ownership.",
+  },
 ];
 
-function CapabilityItem({ label }: CapabilityItemProps) {
-  return <li>{label}</li>;
+function CapabilityItem({ title, description }: CapabilityItemProps) {
+  return (
+    <li>
+      <h3>{title}</h3>
+      <p>{description}</p>
+    </li>
+  );
 }
 
 function WorkflowCapabilities() {
@@ -24,7 +43,11 @@ function WorkflowCapabilities() {
 
       <ul>
         {capabilities.map((capability) => (
-          <CapabilityItem key={capability.id} label={capability.label} />
+          <CapabilityItem
+            key={capability.id}
+            title={capability.title}
+            description={capability.description}
+          />
         ))}
       </ul>
     </section>

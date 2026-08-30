@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "./db";
-import { getCurrentUser } from "./auth";
+import { getCurrentUser, type ThemeAccent } from "./auth";
 import { logActivity } from "./activity";
 import type { ProjectStatus } from "../projects/types";
 import type { TaskPriority, TaskStatus, TaskTag } from "../tasks/types";
@@ -15,6 +15,7 @@ export type ActionResponse = Readonly<{
 
 const USER_SESSION_COOKIE_NAME = "devflow_session_user_id";
 const ORG_SESSION_COOKIE_NAME = "devflow_session_org_id";
+const THEME_ACCENT_COOKIE_NAME = "devflow_theme_accent";
 
 export async function switchActiveUserAction(userId: string): Promise<void> {
   const cookieStore = await cookies();
@@ -30,6 +31,19 @@ export async function switchActiveUserAction(userId: string): Promise<void> {
 export async function switchActiveOrgAction(orgId: string): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(ORG_SESSION_COOKIE_NAME, orgId, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+  });
+
+  revalidatePath("/devflow-saas", "layout");
+}
+
+export async function switchAccentColorAction(
+  accent: ThemeAccent,
+): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(THEME_ACCENT_COOKIE_NAME, accent, {
     path: "/",
     httpOnly: true,
     sameSite: "lax",

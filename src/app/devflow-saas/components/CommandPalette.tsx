@@ -120,6 +120,18 @@ export function CommandPalette({
     });
 
     items.push({
+      id: "nav-tags",
+      category: "Navigation",
+      title: "Go to Domain Tags & Labels",
+      subtitle: "Manage custom workspace tags and color palettes",
+      icon: "🏷️",
+      onSelect: () => {
+        router.push("/devflow-saas/tags");
+        setIsOpen(false);
+      },
+    });
+
+    items.push({
       id: "nav-team",
       category: "Navigation",
       title: "Go to Team & Access Control",
@@ -239,7 +251,7 @@ export function CommandPalette({
       role="dialog"
       aria-modal="true"
       aria-label="Command Palette"
-      className="fixed inset-0 z-9999 flex items-start justify-center p-4 pt-20 sm:pt-28"
+      className="fixed inset-0 z-[9999] flex items-start justify-center p-4 pt-20 sm:pt-28"
     >
       {/* Backdrop */}
       <div

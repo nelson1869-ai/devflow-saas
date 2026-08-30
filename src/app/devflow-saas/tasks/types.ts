@@ -2,13 +2,7 @@ export type TaskStatus = "Todo" | "In Progress" | "Review" | "Done";
 
 export type TaskPriority = "Low" | "Medium" | "High" | "Urgent";
 
-export type TaskTag =
-  | "frontend"
-  | "backend"
-  | "security"
-  | "infra"
-  | "bug"
-  | "feature";
+export type TaskTag = string;
 
 export type Task = Readonly<{
   id: string;

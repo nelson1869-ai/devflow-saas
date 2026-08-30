@@ -19,6 +19,7 @@ const shortcutGroups: readonly ShortcutCategory[] = [
       { keys: ["⌘", "K"], description: "Open Command Palette & Quick Search" },
       { keys: ["/"], description: "Jump directly to Global Full-Text Search" },
       { keys: ["?"], description: "Open this Keyboard Shortcuts Cheat Sheet" },
+      { keys: ["G", "L"], description: "Go to Domain Tags & Labels" },
       { keys: ["G", "C"], description: "Go to Delivery Calendar" },
       { keys: ["G", "S"], description: "Go to Global Search" },
       { keys: ["G", "P"], description: "Go to Projects Dashboard" },
@@ -120,7 +121,11 @@ export function KeyboardShortcutsModal() {
 
       if (isRecentG) {
         const pressed = e.key.toLowerCase();
-        if (pressed === "c") {
+        if (pressed === "l") {
+          e.preventDefault();
+          router.push("/devflow-saas/tags");
+          setIsOpen(false);
+        } else if (pressed === "c") {
           e.preventDefault();
           router.push("/devflow-saas/calendar");
           setIsOpen(false);
@@ -164,7 +169,7 @@ export function KeyboardShortcutsModal() {
       role="dialog"
       aria-modal="true"
       aria-labelledby="shortcuts-heading"
-      className="fixed inset-0 z-9999 flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto"
     >
       {/* Full Screen Backdrop */}
       <div

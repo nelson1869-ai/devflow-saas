@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Task, TaskPriority, TaskStatus, TaskTag } from "./types";
+import type { Task, TaskPriority, TaskStatus } from "./types";
 import { getDueDateMeta } from "../lib/dates";
 import {
   MarkdownView,
@@ -15,6 +15,7 @@ type TaskCardProps = Readonly<{
   onEdit?: (task: Task) => void;
   onDelete?: (taskId: string) => void;
   onUpdateDescription?: (taskId: string, newDescription: string) => void;
+  onTagClick?: (tag: string) => void;
   isDraggable?: boolean;
 }>;
 
@@ -32,13 +33,17 @@ const statusStyles: Readonly<Record<TaskStatus, string>> = {
   Done: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
 };
 
-const tagStyles: Readonly<Record<TaskTag, string>> = {
-  frontend: "text-purple-400 bg-purple-500/10 border-purple-500/30",
-  backend: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30",
-  security: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
-  infra: "text-amber-400 bg-amber-500/10 border-amber-500/30",
-  bug: "text-rose-400 bg-rose-500/10 border-rose-500/30",
-  feature: "text-sky-400 bg-sky-500/10 border-sky-500/30",
+const tagStyles: Readonly<Record<string, string>> = {
+  frontend:
+    "text-purple-400 bg-purple-500/10 border-purple-500/30 hover:border-purple-400",
+  backend:
+    "text-cyan-400 bg-cyan-500/10 border-cyan-500/30 hover:border-cyan-400",
+  security:
+    "text-emerald-400 bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-400",
+  infra:
+    "text-amber-400 bg-amber-500/10 border-amber-500/30 hover:border-amber-400",
+  bug: "text-rose-400 bg-rose-500/10 border-rose-500/30 hover:border-rose-400",
+  feature: "text-sky-400 bg-sky-500/10 border-sky-500/30 hover:border-sky-400",
 };
 
 export function TaskCard({
@@ -47,6 +52,7 @@ export function TaskCard({
   onEdit,
   onDelete,
   onUpdateDescription,
+  onTagClick,
   isDraggable = true,
 }: TaskCardProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -72,6 +78,10 @@ export function TaskCard({
     );
     onUpdateDescription(task.id, updated);
   };
+
+  const currentTagStyle =
+    tagStyles[task.tag] ||
+    "text-cyan-400 bg-cyan-500/10 border-cyan-500/30 hover:border-cyan-400";
 
   return (
     <li
@@ -145,15 +155,29 @@ export function TaskCard({
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* Tag Badge */}
-          <span
-            className={[
-              "inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-mono font-medium lowercase tracking-wider",
-              tagStyles[task.tag],
-            ].join(" ")}
-          >
-            {task.tag}
-          </span>
+          {/* Clickable Dynamic Tag Badge */}
+          {onTagClick ? (
+            <button
+              type="button"
+              onClick={() => onTagClick(task.tag)}
+              title={`Filter board by #${task.tag}`}
+              className={[
+                "inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-mono font-medium lowercase tracking-wider transition hover:scale-105 active:scale-95 cursor-pointer",
+                currentTagStyle,
+              ].join(" ")}
+            >
+              #{task.tag}
+            </button>
+          ) : (
+            <span
+              className={[
+                "inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-mono font-medium lowercase tracking-wider",
+                currentTagStyle,
+              ].join(" ")}
+            >
+              #{task.tag}
+            </span>
+          )}
 
           {/* Priority Badge */}
           <span

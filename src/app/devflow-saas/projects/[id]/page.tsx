@@ -1,6 +1,10 @@
 import Link from "next/link";
-import { getProjectById, getTasksByProjectId } from "../../lib/queries";
-import { getCurrentUser, getAllUsers } from "../../lib/auth";
+import {
+  getProjectById,
+  getTasksByProjectId,
+  getTagsByOrgId,
+} from "../../lib/queries";
+import { getCurrentUser, getAllUsers, getCurrentOrg } from "../../lib/auth";
 import { getCommentsByProjectId } from "../../lib/comments";
 import { ProjectDetailClient } from "./ProjectDetailClient";
 
@@ -14,10 +18,11 @@ export default async function ProjectDetailPage({
   const { id } = await params;
 
   // Real database & session queries
-  const [project, currentUser, allUsers] = await Promise.all([
+  const [project, currentUser, allUsers, currentOrg] = await Promise.all([
     getProjectById(id),
     getCurrentUser(),
     getAllUsers(),
+    getCurrentOrg(),
   ]);
 
   if (!project) {
@@ -42,8 +47,11 @@ export default async function ProjectDetailPage({
     );
   }
 
-  const projectTasks = getTasksByProjectId(project.id);
-  const projectComments = getCommentsByProjectId(project.id);
+  const [projectTasks, projectComments, workspaceTags] = await Promise.all([
+    getTasksByProjectId(project.id),
+    getCommentsByProjectId(project.id),
+    getTagsByOrgId(currentOrg.id),
+  ]);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
@@ -62,6 +70,7 @@ export default async function ProjectDetailPage({
           project={project}
           initialTasks={projectTasks}
           initialComments={projectComments}
+          workspaceTags={workspaceTags}
           currentUser={currentUser}
           allUsers={allUsers}
         />

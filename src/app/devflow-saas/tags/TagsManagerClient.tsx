@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
+import Link from "next/link";
 import type { WorkspaceTag, TagColor } from "../lib/tags";
 import { getTagBadgeStyle } from "../lib/tags";
 import type { Organization, User } from "../lib/auth";
@@ -296,26 +297,33 @@ export function TagsManagerClient({
               >
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span
-                      className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-mono font-semibold lowercase ${getTagBadgeStyle(
+                    <Link
+                      href={`/devflow-saas/search?q=${encodeURIComponent(tag.name)}`}
+                      title={`Search all tasks tagged #${tag.name}`}
+                      className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-mono font-semibold lowercase transition hover:scale-105 active:scale-95 cursor-pointer ${getTagBadgeStyle(
                         tag.color,
                       )}`}
                     >
                       #{tag.name}
-                    </span>
+                    </Link>
 
                     <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-400">
                       {count} task{count === 1 ? "" : "s"}
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-400 leading-relaxed min-h-32px">
+                  <p className="text-xs text-slate-400 leading-relaxed min-h-[32px]">
                     {tag.description || "No description provided."}
                   </p>
                 </div>
 
                 <div className="mt-4 flex items-center justify-between border-t border-slate-800/80 pt-3 text-[11px] text-slate-500">
-                  <span className="capitalize">{tag.color} theme</span>
+                  <Link
+                    href={`/devflow-saas/search?q=${encodeURIComponent(tag.name)}`}
+                    className="font-medium text-cyan-400 hover:text-cyan-300 transition"
+                  >
+                    View tasks ({count}) →
+                  </Link>
 
                   {isAdmin && (
                     <button

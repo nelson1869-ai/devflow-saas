@@ -5,6 +5,7 @@ import type { Project, ProjectStatus } from "../types";
 import type { Task } from "../../tasks/types";
 import type { User } from "../../lib/auth";
 import type { TaskComment } from "../../lib/comments";
+import type { WorkspaceTag } from "../../lib/tags";
 import { ProjectTasksView } from "./ProjectTasksView";
 import { ProjectSettingsView } from "./ProjectSettingsView";
 
@@ -12,6 +13,7 @@ type ProjectDetailClientProps = Readonly<{
   project: Project;
   initialTasks: readonly Task[];
   initialComments: readonly TaskComment[];
+  workspaceTags: readonly WorkspaceTag[];
   currentUser: User;
   allUsers: readonly User[];
 }>;
@@ -26,6 +28,7 @@ export function ProjectDetailClient({
   project,
   initialTasks,
   initialComments,
+  workspaceTags,
   currentUser,
   allUsers,
 }: ProjectDetailClientProps) {
@@ -58,51 +61,41 @@ export function ProjectDetailClient({
         </p>
 
         {/* Project View Tabs */}
-        <div
-          role="tablist"
-          aria-label="Project Sections"
-          className="mt-6 flex items-center gap-2 border-t border-slate-800/80 pt-4"
-        >
+        <div className="mt-8 flex border-b border-slate-800">
           <button
             type="button"
-            role="tab"
-            aria-selected={activeTab === "board"}
             onClick={() => setActiveTab("board")}
             className={[
-              "inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+              "border-b-2 px-4 py-2 text-xs font-bold transition focus-visible:outline-2 focus-visible:outline-cyan-400",
               activeTab === "board"
-                ? "bg-cyan-400 text-slate-950 shadow-sm"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60",
+                ? "border-cyan-400 text-cyan-300"
+                : "border-transparent text-slate-400 hover:text-slate-200",
             ].join(" ")}
           >
-            <span>📋</span>
-            <span>Tasks & Board</span>
+            Tasks & Kanban ({initialTasks.length})
           </button>
-
           <button
             type="button"
-            role="tab"
-            aria-selected={activeTab === "settings"}
             onClick={() => setActiveTab("settings")}
             className={[
-              "inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+              "border-b-2 px-4 py-2 text-xs font-bold transition focus-visible:outline-2 focus-visible:outline-cyan-400",
               activeTab === "settings"
-                ? "bg-cyan-400 text-slate-950 shadow-sm"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60",
+                ? "border-cyan-400 text-cyan-300"
+                : "border-transparent text-slate-400 hover:text-slate-200",
             ].join(" ")}
           >
-            <span>⚙️</span>
-            <span>Settings & Key</span>
+            Project Settings
           </button>
         </div>
       </header>
 
-      {/* Tab Panels */}
+      {/* Tab Content */}
       {activeTab === "board" ? (
         <ProjectTasksView
           projectId={project.id}
           initialTasks={initialTasks}
           initialComments={initialComments}
+          workspaceTags={workspaceTags}
           currentUser={currentUser}
           allUsers={allUsers}
         />

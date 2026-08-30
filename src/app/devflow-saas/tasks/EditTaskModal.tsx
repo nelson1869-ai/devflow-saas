@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, type FormEvent } from "react";
-import type { Task, TaskPriority, TaskStatus, TaskTag } from "./types";
+import type { Task, TaskPriority, TaskStatus } from "./types";
 import type { User } from "../lib/auth";
 import type { TaskComment } from "../lib/comments";
+import type { WorkspaceTag } from "../lib/tags";
 import { MarkdownView } from "../components/MarkdownView";
 
 type EditTaskModalProps = Readonly<{
@@ -11,6 +12,7 @@ type EditTaskModalProps = Readonly<{
   allUsers: readonly User[];
   currentUser: User;
   comments: readonly TaskComment[];
+  workspaceTags?: readonly WorkspaceTag[];
   isOpen: boolean;
   onClose: () => void;
   onSave: (updatedTask: Task) => void;
@@ -23,19 +25,19 @@ export function EditTaskModal({
   allUsers,
   currentUser,
   comments,
+  workspaceTags = [],
   isOpen,
   onClose,
   onSave,
   onAddComment,
   isPending = false,
 }: EditTaskModalProps) {
-  // State initialized directly from props (key-based reset)
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [descTab, setDescTab] = useState<"write" | "preview">("write");
   const [status, setStatus] = useState<TaskStatus>(task.status);
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
-  const [tag, setTag] = useState<TaskTag>(task.tag);
+  const [tag, setTag] = useState<string>(task.tag);
   const [dueDate, setDueDate] = useState(task.dueDate || "");
   const [assigneeName, setAssigneeName] = useState(task.assigneeName);
   const [newComment, setNewComment] = useState("");
@@ -235,7 +237,7 @@ export function EditTaskModal({
                 className="mt-1.5 w-full font-mono rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
               />
             ) : (
-              <div className="mt-1.5 min-h-100px rounded-lg border border-slate-800 bg-slate-950/80 p-3">
+              <div className="mt-1.5 min-h-[100px] rounded-lg border border-slate-800 bg-slate-950/80 p-3">
                 <MarkdownView content={description} />
               </div>
             )}
@@ -297,15 +299,25 @@ export function EditTaskModal({
                 id="edit-task-tag"
                 value={tag}
                 disabled={isPending}
-                onChange={(e) => setTag(e.target.value as TaskTag)}
+                onChange={(e) => setTag(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 font-mono lowercase"
               >
-                <option value="feature">feature</option>
-                <option value="bug">bug</option>
-                <option value="frontend">frontend</option>
-                <option value="backend">backend</option>
-                <option value="security">security</option>
-                <option value="infra">infra</option>
+                {workspaceTags.length > 0 ? (
+                  workspaceTags.map((t) => (
+                    <option key={t.id} value={t.name}>
+                      #{t.name}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="feature">#feature</option>
+                    <option value="bug">#bug</option>
+                    <option value="frontend">#frontend</option>
+                    <option value="backend">#backend</option>
+                    <option value="security">#security</option>
+                    <option value="infra">#infra</option>
+                  </>
+                )}
               </select>
             </div>
 

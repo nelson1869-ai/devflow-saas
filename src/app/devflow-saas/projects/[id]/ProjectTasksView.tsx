@@ -1,14 +1,10 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import type {
-  Task,
-  TaskPriority,
-  TaskStatus,
-  TaskTag,
-} from "../../tasks/types";
+import type { Task, TaskPriority, TaskStatus } from "../../tasks/types";
 import type { User } from "../../lib/auth";
 import type { TaskComment } from "../../lib/comments";
+import type { WorkspaceTag } from "../../lib/tags";
 import { TaskCard } from "../../tasks/TaskCard";
 import { EditTaskModal } from "../../tasks/EditTaskModal";
 import {
@@ -23,6 +19,7 @@ type ProjectTasksViewProps = Readonly<{
   projectId: string;
   initialTasks: readonly Task[];
   initialComments: readonly TaskComment[];
+  workspaceTags: readonly WorkspaceTag[];
   currentUser: User;
   allUsers: readonly User[];
 }>;
@@ -30,7 +27,6 @@ type ProjectTasksViewProps = Readonly<{
 type TaskFilter = "All" | TaskStatus;
 type ViewMode = "kanban" | "grid";
 type PriorityFilter = "All" | TaskPriority;
-type TagFilter = "All" | TaskTag;
 type SortOption = "default" | "dueSoonest" | "priorityHighest";
 
 const taskFilterOptions: readonly TaskFilter[] = [
@@ -47,16 +43,6 @@ const priorityOptions: readonly PriorityFilter[] = [
   "High",
   "Medium",
   "Low",
-];
-
-const tagOptions: readonly TagFilter[] = [
-  "All",
-  "feature",
-  "bug",
-  "frontend",
-  "backend",
-  "security",
-  "infra",
 ];
 
 const kanbanColumns: readonly {
@@ -93,6 +79,7 @@ export function ProjectTasksView({
   projectId,
   initialTasks,
   initialComments,
+  workspaceTags,
   currentUser,
   allUsers,
 }: ProjectTasksViewProps) {
@@ -111,16 +98,17 @@ export function ProjectTasksView({
   const [selectedAssignee, setSelectedAssignee] = useState<string>("All");
   const [selectedPriority, setSelectedPriority] =
     useState<PriorityFilter>("All");
-  const [selectedTag, setSelectedTag] = useState<TagFilter>("All");
+  const [selectedTag, setSelectedTag] = useState<string>("All");
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const [onlyMyTasks, setOnlyMyTasks] = useState(false);
 
   // Form State
+  const defaultTag = workspaceTags[0]?.name || "feature";
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("Todo");
   const [priority, setPriority] = useState<TaskPriority>("Medium");
-  const [tag, setTag] = useState<TaskTag>("feature");
+  const [tag, setTag] = useState<string>(defaultTag);
   const [dueDate, setDueDate] = useState("");
   const [assigneeName, setAssigneeName] = useState(currentUser.name);
   const [formError, setFormError] = useState<string | null>(null);
@@ -141,6 +129,10 @@ export function ProjectTasksView({
   ) {
     setComments(initialComments);
   }
+
+  const handleTagClick = (tagName: string) => {
+    setSelectedTag((prev) => (prev === tagName ? "All" : tagName));
+  };
 
   const handleCreateTask = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -189,7 +181,7 @@ export function ProjectTasksView({
         setDescription("");
         setStatus("Todo");
         setPriority("Medium");
-        setTag("feature");
+        setTag(defaultTag);
         setDueDate("");
         setAssigneeName(currentUser.name);
         setIsFormOpen(false);
@@ -463,16 +455,17 @@ export function ProjectTasksView({
           <span>Only My Tasks</span>
         </button>
 
-        {/* Domain Tag Filter */}
+        {/* Dynamic Workspace Tag Filter */}
         <select
           value={selectedTag}
-          onChange={(e) => setSelectedTag(e.target.value as TagFilter)}
+          onChange={(e) => setSelectedTag(e.target.value)}
           aria-label="Filter by Tag"
           className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-300 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 font-mono lowercase"
         >
-          {tagOptions.map((t) => (
-            <option key={t} value={t}>
-              {t === "All" ? "All Tags" : `#${t}`}
+          <option value="All">All Tags</option>
+          {workspaceTags.map((t) => (
+            <option key={t.id} value={t.name}>
+              #{t.name}
             </option>
           ))}
         </select>
@@ -560,7 +553,7 @@ export function ProjectTasksView({
         )}
       </div>
 
-      {/* Task Creation Form with Due Date */}
+      {/* Task Creation Form with Dynamic Tags */}
       {isFormOpen && (
         <div className="rounded-2xl border border-cyan-500/30 bg-slate-900/90 p-6 shadow-xl">
           <h3 className="text-base font-semibold text-white">
@@ -671,15 +664,14 @@ export function ProjectTasksView({
                   id="task-tag"
                   value={tag}
                   disabled={isPending}
-                  onChange={(e) => setTag(e.target.value as TaskTag)}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  onChange={(e) => setTag(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 font-mono lowercase"
                 >
-                  <option value="feature">feature</option>
-                  <option value="bug">bug</option>
-                  <option value="frontend">frontend</option>
-                  <option value="backend">backend</option>
-                  <option value="security">security</option>
-                  <option value="infra">infra</option>
+                  {workspaceTags.map((t) => (
+                    <option key={t.id} value={t.name}>
+                      #{t.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -817,6 +809,7 @@ export function ProjectTasksView({
                           onEdit={(t) => setEditingTask(t)}
                           onDelete={handleDeleteTask}
                           onUpdateDescription={handleUpdateDescriptionDirectly}
+                          onTagClick={handleTagClick}
                           isDraggable={true}
                         />
                       ))}
@@ -853,18 +846,20 @@ export function ProjectTasksView({
               onEdit={(t) => setEditingTask(t)}
               onDelete={handleDeleteTask}
               onUpdateDescription={handleUpdateDescriptionDirectly}
+              onTagClick={handleTagClick}
               isDraggable={false}
             />
           ))}
         </ul>
       )}
 
-      {/* Edit Task Modal with Due Date, Markdown Tabs and Discussion */}
+      {/* Edit Task Modal with Dynamic Workspace Tags */}
       {editingTask && (
         <EditTaskModal
           key={editingTask.id}
           task={editingTask}
           allUsers={allUsers}
+          workspaceTags={workspaceTags}
           currentUser={currentUser}
           comments={comments.filter((c) => c.taskId === editingTask.id)}
           isOpen={Boolean(editingTask)}

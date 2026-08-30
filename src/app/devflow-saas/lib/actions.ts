@@ -110,6 +110,38 @@ export async function createTaskAction(
   }
 }
 
+export async function updateTaskAction(
+  formData: FormData,
+): Promise<ActionResponse> {
+  const taskId = (formData.get("taskId") as string | null)?.trim();
+  const projectId = (formData.get("projectId") as string | null)?.trim();
+  const title = (formData.get("title") as string | null)?.trim();
+  const description = (formData.get("description") as string | null)?.trim();
+  const status = (formData.get("status") as TaskStatus | null) || "Todo";
+  const priority =
+    (formData.get("priority") as TaskPriority | null) || "Medium";
+  const assigneeName = (formData.get("assigneeName") as string | null)?.trim();
+
+  if (!taskId || !projectId || !title || !description || !assigneeName) {
+    return { success: false, error: "All fields are required." };
+  }
+
+  try {
+    const stmt = db.prepare(`
+      UPDATE devflow_tasks
+      SET title = ?, description = ?, status = ?, priority = ?, assignee_name = ?
+      WHERE id = ?
+    `);
+
+    stmt.run(title, description, status, priority, assigneeName, taskId);
+
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to update task in database." };
+  }
+}
+
 export async function updateTaskStatusAction(
   taskId: string,
   newStatus: TaskStatus,

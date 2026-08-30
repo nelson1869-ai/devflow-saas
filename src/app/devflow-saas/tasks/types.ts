@@ -4,6 +4,8 @@ export type TaskPriority = "Low" | "Medium" | "High" | "Urgent";
 
 export type TaskTag = string;
 
+export type PRStatus = "open" | "merged" | "draft" | "closed";
+
 export type TaskDependency = Readonly<{
   id: string;
   taskId: string;
@@ -44,6 +46,22 @@ export type TaskAttachment = Readonly<{
   createdAt: string;
 }>;
 
+export type TaskPullRequest = Readonly<{
+  id: string;
+  taskId: string;
+  prNumber: number;
+  prTitle: string;
+  prUrl: string;
+  repository: string;
+  branchName: string;
+  status: PRStatus;
+  authorName: string;
+  additions: number;
+  deletions: number;
+  createdAt: string;
+  mergedAt?: string;
+}>;
+
 export type Task = Readonly<{
   id: string;
   projectId: string;
@@ -60,4 +78,5 @@ export type Task = Readonly<{
   timeLogs?: readonly TimeLog[];
   subtasks?: readonly Subtask[];
   attachments?: readonly TaskAttachment[];
+  pullRequests?: readonly TaskPullRequest[];
 }>;

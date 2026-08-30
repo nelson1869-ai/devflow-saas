@@ -10,6 +10,7 @@ import { MentionAutocompleteInput } from "../components/MentionAutocompleteInput
 import { MentionText } from "../components/MentionText";
 import { SubtasksSection } from "./SubtasksSection";
 import { AttachmentsSection } from "./AttachmentsSection";
+import { PullRequestsSection } from "./PullRequestsSection";
 import { TimeTrackingSection } from "./TimeTrackingSection";
 
 type EditTaskModalProps = Readonly<{
@@ -480,6 +481,15 @@ export function EditTaskModal({
         {/* File Attachments & Artifact Previews (Phase 72) */}
         <div className="border-t border-slate-800 pt-6">
           <AttachmentsSection
+            task={task}
+            projectId={task.projectId}
+            currentUser={currentUser}
+          />
+        </div>
+
+        {/* Git Pull Requests & Branches (Phase 79) */}
+        <div className="border-t border-slate-800 pt-6">
+          <PullRequestsSection
             task={task}
             projectId={task.projectId}
             currentUser={currentUser}

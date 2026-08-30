@@ -10,6 +10,8 @@ import type {
   TimeLog,
   Subtask,
   TaskAttachment,
+  TaskPullRequest,
+  PRStatus,
 } from "../tasks/types";
 import type { WorkspaceTag, TagColor } from "./tags";
 
@@ -77,6 +79,22 @@ type AttachmentRow = {
   file_size_bytes: number;
   file_url: string;
   created_at: string;
+};
+
+type PRRow = {
+  id: string;
+  task_id: string;
+  pr_number: number;
+  pr_title: string;
+  pr_url: string;
+  repository: string;
+  branch_name: string;
+  status: PRStatus;
+  author_name: string;
+  additions: number;
+  deletions: number;
+  created_at: string;
+  merged_at: string | null;
 };
 
 type TagRow = {
@@ -266,6 +284,37 @@ export function getTasksByProjectId(projectId: string): readonly Task[] {
     attachMap.set(a.task_id, list);
   }
 
+  // Fetch all pull requests for tasks in this project
+  const prStmt = db.prepare(`
+    SELECT id, task_id, pr_number, pr_title, pr_url, repository, branch_name, status, author_name, additions, deletions, created_at, merged_at
+    FROM devflow_task_prs
+    WHERE task_id IN (SELECT id FROM devflow_tasks WHERE project_id = ?)
+    ORDER BY created_at DESC
+  `);
+
+  const prRows = prStmt.all(projectId) as PRRow[];
+  const prMap = new Map<string, TaskPullRequest[]>();
+
+  for (const p of prRows) {
+    const list = prMap.get(p.task_id) || [];
+    list.push({
+      id: p.id,
+      taskId: p.task_id,
+      prNumber: p.pr_number,
+      prTitle: p.pr_title,
+      prUrl: p.pr_url,
+      repository: p.repository,
+      branchName: p.branch_name,
+      status: p.status,
+      authorName: p.author_name,
+      additions: p.additions,
+      deletions: p.deletions,
+      createdAt: p.created_at,
+      mergedAt: p.merged_at ?? undefined,
+    });
+    prMap.set(p.task_id, list);
+  }
+
   return rows.map((row) => {
     const logs = timeMap.get(row.id) || [];
     const loggedHours = logs.reduce((sum, l) => sum + l.hours, 0);
@@ -286,6 +335,7 @@ export function getTasksByProjectId(projectId: string): readonly Task[] {
       timeLogs: logs,
       subtasks: subtaskMap.get(row.id) || [],
       attachments: attachMap.get(row.id) || [],
+      pullRequests: prMap.get(row.id) || [],
     };
   });
 }

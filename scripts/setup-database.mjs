@@ -281,6 +281,26 @@ db.exec(`
   );
 `);
 
+// 19. Task Pull Requests & Git Branch Links (Phase 79)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS devflow_task_prs (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    pr_title TEXT NOT NULL,
+    pr_url TEXT NOT NULL,
+    repository TEXT NOT NULL,
+    branch_name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    author_name TEXT NOT NULL,
+    additions INTEGER NOT NULL DEFAULT 0,
+    deletions INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    merged_at TEXT,
+    FOREIGN KEY (task_id) REFERENCES devflow_tasks(id) ON DELETE CASCADE
+  );
+`);
+
 // Seed Initial Data
 const orgCount = db
   .prepare("SELECT count(*) as count FROM devflow_organizations")
@@ -442,6 +462,25 @@ if (projectCount === 0) {
     "Write integration tests for token refresh",
     0,
     3,
+  );
+
+  // Seed Initial Pull Request for Task 1
+  const insertPR = db.prepare(`
+    INSERT INTO devflow_task_prs (id, task_id, pr_number, pr_title, pr_url, repository, branch_name, status, author_name, additions, deletions)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  insertPR.run(
+    "pr-1",
+    "task-1",
+    42,
+    "feat(auth): PKCE OAuth2 Provider Callback Handler",
+    "https://github.com/acme/cloud-api/pull/42",
+    "acme/cloud-api",
+    "feat/PLAT-1-oauth-pkce",
+    "open",
+    "Alex Rivera",
+    184,
+    32,
   );
 }
 

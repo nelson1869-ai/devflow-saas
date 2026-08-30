@@ -235,6 +235,23 @@ try {
       FOREIGN KEY (task_id) REFERENCES devflow_tasks(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS devflow_task_prs (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      pr_number INTEGER NOT NULL,
+      pr_title TEXT NOT NULL,
+      pr_url TEXT NOT NULL,
+      repository TEXT NOT NULL,
+      branch_name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      author_name TEXT NOT NULL,
+      additions INTEGER NOT NULL DEFAULT 0,
+      deletions INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      merged_at TEXT,
+      FOREIGN KEY (task_id) REFERENCES devflow_tasks(id) ON DELETE CASCADE
+    );
   `);
 
   // Runtime self-healing column migrations

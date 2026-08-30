@@ -42,6 +42,7 @@ export function TaskCard({
   const completedCount = subtasks.filter((s) => s.isCompleted).length;
 
   const attachments = task.attachments || [];
+  const pullRequests = task.pullRequests || [];
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData("text/plain", task.id);
@@ -170,13 +171,14 @@ export function TaskCard({
         )}
       </div>
 
-      {/* Footer: Due Date, Assignee, Attachment Counter, Actions */}
+      {/* Footer: Due Date, Assignee, Attachments, PR Badges, Actions */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-900 pt-3 text-xs">
         <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[11px] font-medium text-slate-300">
               👤 {task.assigneeName}
             </span>
+
             {attachments.length > 0 && (
               <span
                 title={`${attachments.length} attached file(s)`}
@@ -185,7 +187,24 @@ export function TaskCard({
                 📎 {attachments.length}
               </span>
             )}
+
+            {pullRequests.length > 0 && (
+              <span
+                title={`${pullRequests.length} linked PR(s) • ${pullRequests[0].repository}#${pullRequests[0].prNumber}`}
+                className={[
+                  "rounded px-1.5 py-0.2 text-[10px] font-mono border",
+                  pullRequests.some((p) => p.status === "merged")
+                    ? "bg-purple-500/10 text-purple-300 border-purple-500/30"
+                    : pullRequests.some((p) => p.status === "open")
+                      ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+                      : "bg-slate-900 text-slate-400 border-slate-800",
+                ].join(" ")}
+              >
+                🐙 #{pullRequests[0].prNumber}
+              </span>
+            )}
           </div>
+
           {task.dueDate && (
             <time className={`text-[10px] ${dueMeta.badgeStyle}`}>
               {dueMeta.label}
@@ -193,7 +212,7 @@ export function TaskCard({
           )}
         </div>
 
-        {/* Quick Actions Dropdown / Buttons */}
+        {/* Quick Actions */}
         <div className="flex items-center gap-1">
           {onViewHistory && (
             <button
@@ -209,7 +228,7 @@ export function TaskCard({
           <button
             type="button"
             onClick={() => onEdit(task)}
-            title="Edit task & attachments"
+            title="Edit task, checklist, attachments & PRs"
             className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
           >
             ✏️

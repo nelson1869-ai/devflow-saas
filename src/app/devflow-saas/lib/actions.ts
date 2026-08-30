@@ -12,3 +12,4 @@ export * from "./actions/milestones";
 export * from "./actions/saved-views";
 export * from "./actions/automations";
 export * from "./actions/attachments";
+export * from "./actions/pull-requests";

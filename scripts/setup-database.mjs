@@ -229,6 +229,41 @@ db.exec(`
   );
 `);
 
+// 16. Workflow Automation Rules (Phase 71)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS devflow_automations (
+    id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL,
+    project_id TEXT,
+    name TEXT NOT NULL,
+    description TEXT,
+    trigger_event TEXT NOT NULL,
+    condition_json TEXT NOT NULL DEFAULT '{}',
+    action_type TEXT NOT NULL,
+    action_payload_json TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    execution_count INTEGER NOT NULL DEFAULT 0,
+    last_triggered_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
+  );
+`);
+
+// 17. Workflow Automation Execution Logs (Phase 71)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS devflow_automation_logs (
+    id TEXT PRIMARY KEY,
+    automation_id TEXT NOT NULL,
+    task_id TEXT,
+    trigger_event TEXT NOT NULL,
+    action_taken TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'SUCCESS',
+    executed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (automation_id) REFERENCES devflow_automations(id) ON DELETE CASCADE
+  );
+`);
+
 // Seed Initial Data
 const orgCount = db
   .prepare("SELECT count(*) as count FROM devflow_organizations")
@@ -390,6 +425,57 @@ if (projectCount === 0) {
     "Write integration tests for token refresh",
     0,
     3,
+  );
+}
+
+// Seed Starter Automation Rules (Phase 71)
+const autoCount = db
+  .prepare("SELECT count(*) as count FROM devflow_automations")
+  .get().count;
+if (autoCount === 0) {
+  console.log("Seeding Starter Workflow Automation Rules...");
+  const insertAuto = db.prepare(`
+    INSERT INTO devflow_automations (id, org_id, project_id, name, description, trigger_event, condition_json, action_type, action_payload_json, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+  `);
+
+  insertAuto.run(
+    "auto-1",
+    "org-1",
+    null,
+    "Auto-Move to Review on All Subtasks Completed",
+    "When all subtasks of an active task are checked off, automatically transition stage to Review and post a QA bot note.",
+    "all_subtasks_completed",
+    "{}",
+    "change_status",
+    JSON.stringify({ status: "Review", postComment: true }),
+  );
+
+  insertAuto.run(
+    "auto-2",
+    "org-1",
+    null,
+    "Auto-Escalate Urgent Issues to Admin",
+    "When a task priority is changed to Urgent, reassign to workspace Admin and tag as #bug.",
+    "task_priority_urgent",
+    "{}",
+    "reassign_user",
+    JSON.stringify({ assigneeName: "Alex Rivera", addTag: "bug" }),
+  );
+
+  insertAuto.run(
+    "auto-3",
+    "org-1",
+    null,
+    "Alert on Time Budget Overrun",
+    "When work logged exceeds the initial estimate, post an automated budget variance warning note.",
+    "time_over_budget",
+    "{}",
+    "post_comment",
+    JSON.stringify({
+      content:
+        "⚠️ Automation Bot: This task has exceeded its estimated work budget.",
+    }),
   );
 }
 

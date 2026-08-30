@@ -192,6 +192,35 @@ try {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (task_id) REFERENCES devflow_tasks(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS devflow_automations (
+      id TEXT PRIMARY KEY,
+      org_id TEXT NOT NULL,
+      project_id TEXT,
+      name TEXT NOT NULL,
+      description TEXT,
+      trigger_event TEXT NOT NULL,
+      condition_json TEXT NOT NULL DEFAULT '{}',
+      action_type TEXT NOT NULL,
+      action_payload_json TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      execution_count INTEGER NOT NULL DEFAULT 0,
+      last_triggered_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS devflow_automation_logs (
+      id TEXT PRIMARY KEY,
+      automation_id TEXT NOT NULL,
+      task_id TEXT,
+      trigger_event TEXT NOT NULL,
+      action_taken TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'SUCCESS',
+      executed_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (automation_id) REFERENCES devflow_automations(id) ON DELETE CASCADE
+    );
   `);
 
   // Runtime self-healing column migrations

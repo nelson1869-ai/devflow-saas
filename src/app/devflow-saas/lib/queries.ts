@@ -24,7 +24,6 @@ type ProjectRow = {
   status: ProjectStatus;
   is_archived: number;
   archived_at: string | null;
-  created_at: string;
 };
 
 type TaskRow = {
@@ -38,7 +37,6 @@ type TaskRow = {
   tag: string;
   due_date: string | null;
   estimated_hours: number;
-  created_at: string;
 };
 
 type DependencyRow = {
@@ -110,7 +108,6 @@ export function getAllProjects(): readonly Project[] {
   const stmt = db.prepare(`
     SELECT id, org_id, name, key, description, status, is_archived, archived_at
     FROM devflow_projects
-    ORDER BY created_at DESC
   `);
 
   const rows = stmt.all() as ProjectRow[];
@@ -131,7 +128,6 @@ export function getProjectsByOrgId(orgId: string): readonly Project[] {
     SELECT id, org_id, name, key, description, status, is_archived, archived_at
     FROM devflow_projects
     WHERE org_id = ?
-    ORDER BY created_at DESC
   `);
 
   const rows = stmt.all(orgId) as ProjectRow[];
@@ -174,7 +170,6 @@ export function getTasksByProjectId(projectId: string): readonly Task[] {
     SELECT id, project_id, title, description, status, priority, assignee_name, tag, due_date, estimated_hours
     FROM devflow_tasks
     WHERE project_id = ?
-    ORDER BY created_at DESC
   `);
 
   const rows = stmt.all(projectId) as TaskRow[];

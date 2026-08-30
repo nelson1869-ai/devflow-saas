@@ -21,10 +21,10 @@ export function getActivitiesByOrgId(
   limit = 30,
 ): readonly ActivityItem[] {
   const stmt = db.prepare(`
-    SELECT id, org_id, project_id, task_id, user_name, action, entity_title, details, created_at
-    FROM devflow_activity
+    SELECT id, org_id, project_id, task_id, user_name, action, target as entity_title, details, timestamp as created_at
+    FROM devflow_activities
     WHERE org_id = ?
-    ORDER BY created_at DESC
+    ORDER BY timestamp DESC
     LIMIT ?
   `);
 
@@ -44,10 +44,10 @@ export function getActivitiesByOrgId(
 
 export function getActivitiesByTaskId(taskId: string): readonly ActivityItem[] {
   const stmt = db.prepare(`
-    SELECT id, org_id, project_id, task_id, user_name, action, entity_title, details, created_at
-    FROM devflow_activity
+    SELECT id, org_id, project_id, task_id, user_name, action, target as entity_title, details, timestamp as created_at
+    FROM devflow_activities
     WHERE task_id = ?
-    ORDER BY created_at DESC
+    ORDER BY timestamp DESC
     LIMIT 50
   `);
 
@@ -77,7 +77,7 @@ export function logActivity(
   try {
     const id = `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const stmt = db.prepare(`
-      INSERT INTO devflow_activity (id, org_id, project_id, task_id, user_name, action, entity_title, details)
+      INSERT INTO devflow_activities (id, org_id, project_id, task_id, user_name, action, target, details)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 

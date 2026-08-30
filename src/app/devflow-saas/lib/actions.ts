@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import { getCurrentUser, type ThemeAccent, type UserRole } from "./auth";
 import { logActivity } from "./activity";
+import { createNotification } from "./notifications";
 import type { ProjectStatus } from "../projects/types";
 import type { TaskPriority, TaskStatus, TaskTag } from "../tasks/types";
 
@@ -52,6 +53,43 @@ export async function switchAccentColorAction(
   revalidatePath("/devflow-saas", "layout");
 }
 
+export async function markNotificationAsReadAction(
+  notificationId: string,
+): Promise<ActionResponse> {
+  try {
+    const stmt = db.prepare(
+      "UPDATE devflow_notifications SET is_read = 1 WHERE id = ?",
+    );
+    stmt.run(notificationId);
+
+    revalidatePath("/devflow-saas", "layout");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to mark notification as read." };
+  }
+}
+
+export async function markAllNotificationsAsReadAction(): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  const cookieStore = await cookies();
+  const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
+
+  try {
+    const stmt = db.prepare(
+      "UPDATE devflow_notifications SET is_read = 1 WHERE user_id = ? AND org_id = ?",
+    );
+    stmt.run(currentUser.id, orgId);
+
+    revalidatePath("/devflow-saas", "layout");
+    return { success: true };
+  } catch {
+    return {
+      success: false,
+      error: "Failed to mark all notifications as read.",
+    };
+  }
+}
+
 export async function updateUserRoleAction(
   targetUserId: string,
   newRole: UserRole,
@@ -84,11 +122,20 @@ export async function updateUserRoleAction(
 
     logActivity(
       orgId,
-      null,
+      undefined,
       currentUser.name,
       "updated_user",
       targetUser.name,
       `Changed role from ${targetUser.role} to ${newRole}.`,
+    );
+
+    createNotification(
+      targetUserId,
+      orgId,
+      "Role Updated",
+      `Your workspace role was changed to ${newRole} by ${currentUser.name}.`,
+      "system",
+      "/devflow-saas/team",
     );
 
     revalidatePath("/devflow-saas/team");
@@ -135,7 +182,7 @@ export async function inviteTeamMemberAction(
 
     logActivity(
       orgId,
-      null,
+      undefined,
       currentUser.name,
       "invited_user",
       name,
@@ -360,10 +407,10 @@ export async function createTaskAction(
     );
 
     const projectStmt = db.prepare(
-      "SELECT org_id FROM devflow_projects WHERE id = ?",
+      "SELECT org_id, name FROM devflow_projects WHERE id = ?",
     );
     const project = projectStmt.get(projectId) as
-      | { org_id: string }
+      | { org_id: string; name: string }
       | undefined;
 
     if (project) {
@@ -377,6 +424,22 @@ export async function createTaskAction(
           dueDate ? `, due ${dueDate}` : ""
         }).`,
       );
+
+      // Notify assignee if assigned to someone else
+      const userStmt = db.prepare(
+        "SELECT id FROM devflow_users WHERE name = ?",
+      );
+      const assignee = userStmt.get(assigneeName) as { id: string } | undefined;
+      if (assignee && assignee.id !== currentUser.id) {
+        createNotification(
+          assignee.id,
+          project.org_id,
+          "New Task Assigned",
+          `${currentUser.name} assigned you to "${title}" in ${project.name}.`,
+          "assignment",
+          `/devflow-saas/projects/${projectId}`,
+        );
+      }
     }
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
@@ -461,8 +524,12 @@ export async function updateTaskStatusAction(
 ): Promise<ActionResponse> {
   const currentUser = await getCurrentUser();
   try {
-    const taskStmt = db.prepare("SELECT title FROM devflow_tasks WHERE id = ?");
-    const task = taskStmt.get(taskId) as { title: string } | undefined;
+    const taskStmt = db.prepare(
+      "SELECT title, assignee_name FROM devflow_tasks WHERE id = ?",
+    );
+    const task = taskStmt.get(taskId) as
+      | { title: string; assignee_name: string }
+      | undefined;
 
     const stmt = db.prepare(`
       UPDATE devflow_tasks
@@ -559,8 +626,12 @@ export async function createCommentAction(
 
     stmt.run(id, taskId, currentUser.id, currentUser.name, content);
 
-    const taskStmt = db.prepare("SELECT title FROM devflow_tasks WHERE id = ?");
-    const task = taskStmt.get(taskId) as { title: string } | undefined;
+    const taskStmt = db.prepare(
+      "SELECT title, assignee_name FROM devflow_tasks WHERE id = ?",
+    );
+    const task = taskStmt.get(taskId) as
+      | { title: string; assignee_name: string }
+      | undefined;
 
     const projectStmt = db.prepare(
       "SELECT org_id FROM devflow_projects WHERE id = ?",
@@ -578,6 +649,24 @@ export async function createCommentAction(
         task.title,
         `Added note: "${content.slice(0, 50)}${content.length > 50 ? "..." : ""}"`,
       );
+
+      // Notify task assignee if someone else comments
+      const userStmt = db.prepare(
+        "SELECT id FROM devflow_users WHERE name = ?",
+      );
+      const assignee = userStmt.get(task.assignee_name) as
+        | { id: string }
+        | undefined;
+      if (assignee && assignee.id !== currentUser.id) {
+        createNotification(
+          assignee.id,
+          project.org_id,
+          "New Discussion Note",
+          `${currentUser.name} commented on "${task.title}": "${content.slice(0, 60)}${content.length > 60 ? "..." : ""}"`,
+          "comment",
+          `/devflow-saas/projects/${projectId}`,
+        );
+      }
     }
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);

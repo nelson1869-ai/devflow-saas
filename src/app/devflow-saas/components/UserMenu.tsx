@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { User } from "../lib/auth";
 import { switchActiveUserAction } from "../lib/actions";
 
@@ -17,10 +18,12 @@ const roleBadgeStyles = {
 
 export function UserMenu({ currentUser, allUsers }: UserMenuProps) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const handleUserChange = (userId: string) => {
     startTransition(async () => {
       await switchActiveUserAction(userId);
+      router.refresh();
     });
   };
 

@@ -44,7 +44,7 @@ export async function switchActiveUserAction(
       maxAge: 60 * 60 * 24 * 30, // 30 days
       sameSite: "lax",
     });
-    revalidatePath("/devflow-saas");
+    revalidatePath("/devflow-saas", "layout");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to switch demo user." };
@@ -81,7 +81,7 @@ export async function switchActiveOrgAction(
       maxAge: 60 * 60 * 24 * 30, // 30 days
       sameSite: "lax",
     });
-    revalidatePath("/devflow-saas");
+    revalidatePath("/devflow-saas", "layout");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to switch workspace." };
@@ -98,7 +98,7 @@ export async function switchAccentColorAction(
       maxAge: 60 * 60 * 24 * 365, // 1 year
       sameSite: "lax",
     });
-    revalidatePath("/devflow-saas");
+    revalidatePath("/devflow-saas", "layout");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to update theme accent." };
@@ -115,7 +115,7 @@ export async function setThemeModeAction(
       maxAge: 60 * 60 * 24 * 365, // 1 year
       sameSite: "lax",
     });
-    revalidatePath("/devflow-saas");
+    revalidatePath("/devflow-saas", "layout");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to update theme mode." };
@@ -162,7 +162,7 @@ export async function updateUserRoleAction(
       `Changed role to "${validRole}".`,
     );
 
-    revalidatePath("/devflow-saas");
+    revalidatePath("/devflow-saas", "layout");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to update user role." };
@@ -224,7 +224,7 @@ export async function inviteTeamMemberAction(
       `Invited ${name} (${email}) with role "${validRole}".`,
     );
 
-    revalidatePath("/devflow-saas");
+    revalidatePath("/devflow-saas", "layout");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to invite team member." };

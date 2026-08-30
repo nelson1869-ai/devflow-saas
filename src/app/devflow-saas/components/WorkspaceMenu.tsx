@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import type { Organization } from "../lib/auth";
 import { switchActiveOrgAction } from "../lib/actions";
 
@@ -11,10 +12,17 @@ type WorkspaceMenuProps = Readonly<{
 
 export function WorkspaceMenu({ currentOrg, allOrgs }: WorkspaceMenuProps) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const handleOrgChange = (orgId: string) => {
     startTransition(async () => {
       await switchActiveOrgAction(orgId);
+      if (pathname.includes("/projects/")) {
+        router.push("/devflow-saas/projects");
+      } else {
+        router.refresh();
+      }
     });
   };
 

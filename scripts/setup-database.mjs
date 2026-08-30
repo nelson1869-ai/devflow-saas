@@ -347,6 +347,7 @@ if (userCount === 0) {
   insertUser.run("usr-3", "Devin Zhao", "devin@acme.dev", "Member", null);
 }
 
+// Seed Projects (Acme Corp & DevFlow Studios)
 const projectCount = db
   .prepare("SELECT count(*) as count FROM devflow_projects")
   .get().count;
@@ -355,6 +356,8 @@ if (projectCount === 0) {
   const insertProj = db.prepare(
     "INSERT INTO devflow_projects (id, org_id, name, key, description, status) VALUES (?, ?, ?, ?, ?, ?)",
   );
+
+  // Acme Corp Projects
   insertProj.run(
     "proj-1",
     "org-1",
@@ -380,11 +383,30 @@ if (projectCount === 0) {
     "Planning",
   );
 
+  // DevFlow Studios Projects
+  insertProj.run(
+    "proj-4",
+    "org-2",
+    "Mobile Game Engine v2",
+    "GAME",
+    "Cross-platform 2D/3D mobile graphics pipeline, physics, and input mapping.",
+    "Active",
+  );
+  insertProj.run(
+    "proj-5",
+    "org-2",
+    "Creator Studio Web UI",
+    "STUDIO",
+    "Visual node editor, asset management, and live shader preview workspace.",
+    "Active",
+  );
+
   const insertTask = db.prepare(`
     INSERT INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date, estimated_hours)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
+  // Tasks for proj-1 (Acme)
   insertTask.run(
     "task-1",
     "proj-1",
@@ -397,7 +419,6 @@ if (projectCount === 0) {
     "2026-09-05",
     8,
   );
-
   insertTask.run(
     "task-2",
     "proj-1",
@@ -410,7 +431,6 @@ if (projectCount === 0) {
     "2026-09-02",
     4,
   );
-
   insertTask.run(
     "task-3",
     "proj-1",
@@ -423,7 +443,6 @@ if (projectCount === 0) {
     "2026-08-28",
     6,
   );
-
   insertTask.run(
     "task-4",
     "proj-1",
@@ -436,7 +455,6 @@ if (projectCount === 0) {
     "2026-09-01",
     3,
   );
-
   insertTask.run(
     "task-5",
     "proj-1",
@@ -450,7 +468,47 @@ if (projectCount === 0) {
     5,
   );
 
-  // Seed Initial Subtasks for Task 1
+  // Tasks for proj-4 (DevFlow Studios)
+  insertTask.run(
+    "task-20",
+    "proj-4",
+    "Implement WebGPU Renderer Backend",
+    "Next-generation rendering pipeline with compute shaders.",
+    "In Progress",
+    "High",
+    "Alex Rivera",
+    "engine",
+    "2026-09-10",
+    12,
+  );
+  insertTask.run(
+    "task-21",
+    "proj-4",
+    "Touch Input Gesture Recognizer",
+    "Multi-touch pinch, zoom, and joystick controls for mobile.",
+    "Todo",
+    "Medium",
+    "Devin Zhao",
+    "mobile",
+    "2026-09-15",
+    6,
+  );
+
+  // Tasks for proj-5 (DevFlow Studios)
+  insertTask.run(
+    "task-22",
+    "proj-5",
+    "Node Graph Canvas Drag & Drop",
+    "Interactive node-based shader graph editor with undo/redo.",
+    "Review",
+    "Urgent",
+    "Sarah Connor",
+    "ui",
+    "2026-09-06",
+    8,
+  );
+
+  // Subtasks for Task 1
   const insertSubtask = db.prepare(`
     INSERT INTO devflow_subtasks (id, task_id, title, is_completed, position)
     VALUES (?, ?, ?, ?, ?)
@@ -484,7 +542,7 @@ if (projectCount === 0) {
     3,
   );
 
-  // Seed Initial Pull Request for Task 1
+  // Pull Request for Task 1
   const insertPR = db.prepare(`
     INSERT INTO devflow_task_prs (id, task_id, pr_number, pr_title, pr_url, repository, branch_name, status, author_name, additions, deletions, merged_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'merged', ?, ?, ?, datetime('now'))

@@ -10,9 +10,9 @@ import {
 } from "./lib/auth";
 import { getProjectsByOrgId } from "./lib/queries";
 import { getNotificationsForUser } from "./lib/notifications";
+import { CommandPalette } from "./components/CommandPalette";
 import { UserMenu } from "./components/UserMenu";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
-import { CommandPalette } from "./components/CommandPalette";
 import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { ThemeAccentPicker } from "./components/ThemeAccentPicker";
 import { NotificationBell } from "./components/NotificationBell";
@@ -33,7 +33,6 @@ const accentPalettes: Record<
 };
 
 export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
-  // Server-side session resolution
   const [currentUser, allUsers, currentOrg, allOrgs, currentAccent] =
     await Promise.all([
       getCurrentUser(),
@@ -53,7 +52,7 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
   return (
     <div
       data-accent={currentAccent}
-      className="min-h-screen bg-slate-950 text-slate-100 antialiased"
+      className="min-h-screen bg-slate-950 text-slate-100 antialiased selection:bg-cyan-500 selection:text-white"
     >
       {/* Dynamic Global Theme Accent CSS Variables */}
       <style>{`
@@ -105,7 +104,7 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
 
             <nav
               aria-label="Main Navigation"
-              className="hidden items-center gap-6 sm:flex"
+              className="hidden items-center gap-5 sm:flex"
             >
               <Link
                 href="/devflow-saas"
@@ -150,6 +149,12 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
                 Analytics
               </Link>
               <Link
+                href="/devflow-saas/integrations"
+                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+              >
+                Webhooks
+              </Link>
+              <Link
                 href="/devflow-saas/team"
                 className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
               >
@@ -178,13 +183,13 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
             {/* Multi-Tenant Workspace Switcher */}
             <WorkspaceMenu currentOrg={currentOrg} allOrgs={allOrgs} />
 
-            {/* Active User Session Menu */}
+            {/* User Profile Switcher */}
             <UserMenu currentUser={currentUser} allUsers={allUsers} />
           </div>
         </div>
       </header>
 
-      {/* Page Content */}
+      {/* Main Content Viewport */}
       <div className="flex-1">{children}</div>
     </div>
   );

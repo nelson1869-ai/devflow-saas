@@ -4,6 +4,7 @@ import { useState, useEffect, type FormEvent } from "react";
 import type { Task, TaskPriority, TaskStatus, TaskTag } from "./types";
 import type { User } from "../lib/auth";
 import type { TaskComment } from "../lib/comments";
+import { MarkdownView } from "../components/MarkdownView";
 
 type EditTaskModalProps = Readonly<{
   task: Task;
@@ -31,6 +32,7 @@ export function EditTaskModal({
   // State initialized directly from props (key-based reset)
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
+  const [descTab, setDescTab] = useState<"write" | "preview">("write");
   const [status, setStatus] = useState<TaskStatus>(task.status);
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const [tag, setTag] = useState<TaskTag>(task.tag);
@@ -86,6 +88,14 @@ export function EditTaskModal({
 
     onAddComment(trimmed);
     setNewComment("");
+  };
+
+  const insertSnippet = (snippet: string) => {
+    setDescription((prev) => {
+      const separator = prev.endsWith("\n") || !prev ? "" : "\n";
+      return `${prev}${separator}${snippet}`;
+    });
+    setDescTab("write");
   };
 
   return (
@@ -146,22 +156,89 @@ export function EditTaskModal({
             />
           </div>
 
+          {/* Markdown Description with Write vs Preview Tabs */}
           <div>
-            <label
-              htmlFor="edit-task-desc"
-              className="block text-xs font-medium text-slate-300"
-            >
-              Description
-            </label>
-            <textarea
-              id="edit-task-desc"
-              rows={2}
-              required
-              disabled={isPending}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
-            />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="edit-task-desc"
+                  className="block text-xs font-medium text-slate-300"
+                >
+                  Description (Markdown)
+                </label>
+                <div className="inline-flex rounded-lg border border-slate-800 bg-slate-950 p-0.5 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setDescTab("write")}
+                    className={[
+                      "rounded px-2 py-0.5 font-semibold transition",
+                      descTab === "write"
+                        ? "bg-slate-800 text-cyan-300"
+                        : "text-slate-400 hover:text-slate-200",
+                    ].join(" ")}
+                  >
+                    Write
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDescTab("preview")}
+                    className={[
+                      "rounded px-2 py-0.5 font-semibold transition",
+                      descTab === "preview"
+                        ? "bg-slate-800 text-cyan-300"
+                        : "text-slate-400 hover:text-slate-200",
+                    ].join(" ")}
+                  >
+                    Preview
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Snippet Helpers */}
+              <div className="flex items-center gap-1.5 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => insertSnippet("- [ ] Acceptance criterion")}
+                  className="rounded border border-slate-800 bg-slate-950/80 px-2 py-0.5 text-slate-300 hover:border-slate-700 hover:text-cyan-300 transition"
+                  title="Insert Checklist item"
+                >
+                  + Checklist
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertSnippet("**bold text**")}
+                  className="rounded border border-slate-800 bg-slate-950/80 px-2 py-0.5 text-slate-300 hover:border-slate-700 hover:text-cyan-300 transition"
+                  title="Insert Bold text"
+                >
+                  + Bold
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertSnippet("`code snippet`")}
+                  className="rounded border border-slate-800 bg-slate-950/80 px-2 py-0.5 text-slate-300 hover:border-slate-700 hover:text-cyan-300 transition"
+                  title="Insert Inline Code"
+                >
+                  + Code
+                </button>
+              </div>
+            </div>
+
+            {descTab === "write" ? (
+              <textarea
+                id="edit-task-desc"
+                rows={4}
+                required
+                disabled={isPending}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Support **bold**, `code`, and checklists:&#10;- [ ] Checklist item 1&#10;- [ ] Checklist item 2"
+                className="mt-1.5 w-full font-mono rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
+              />
+            ) : (
+              <div className="mt-1.5 min-h-[100px] rounded-lg border border-slate-800 bg-slate-950/80 p-3">
+                <MarkdownView content={description} />
+              </div>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -221,7 +298,7 @@ export function EditTaskModal({
                 value={tag}
                 disabled={isPending}
                 onChange={(e) => setTag(e.target.value as TaskTag)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 font-mono lowercase"
               >
                 <option value="feature">feature</option>
                 <option value="bug">bug</option>

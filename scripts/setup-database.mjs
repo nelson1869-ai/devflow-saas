@@ -59,6 +59,7 @@ database.exec(`
     priority TEXT NOT NULL DEFAULT 'Medium',
     assignee_name TEXT NOT NULL,
     tag TEXT NOT NULL DEFAULT 'feature',
+    due_date TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
   );
@@ -105,6 +106,13 @@ try {
   // Column already exists
 }
 
+// Migration: ensure due_date column exists on existing devflow_tasks table
+try {
+  database.exec("ALTER TABLE devflow_tasks ADD COLUMN due_date TEXT");
+} catch {
+  // Column already exists
+}
+
 database.exec(`
   -- Seed Organizations
   INSERT OR IGNORE INTO devflow_organizations (id, name, slug) VALUES
@@ -129,16 +137,16 @@ database.exec(`
     ('proj-5', 'org-2', 'Jarvis Neural Assistant v4', 'JARV', 'Edge inference neural network pipeline for autonomous diagnostics.', 'Planning');
 
   -- Seed Tasks (Acme Engineering)
-  INSERT OR IGNORE INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag) VALUES
-    ('task-101', 'proj-1', 'Implement JWT Session Verification', 'Validate session cookies and decode tenant claims in middleware.', 'In Progress', 'High', 'Nelson Rivera', 'security'),
-    ('task-102', 'proj-1', 'Configure Redis Rate Limiter', 'Apply 100 req/min bucket per API key for external traffic.', 'Todo', 'Urgent', 'Devin Zhao', 'backend'),
-    ('task-103', 'proj-1', 'Database Isolation Unit Tests', 'Write integration tests ensuring zero data leak across organizations.', 'Review', 'Medium', 'Sarah Connor', 'infra'),
-    ('task-201', 'proj-2', 'Design Telemetry Chart Wireframes', 'Draft Figma components for latency percentiles and error rates.', 'In Progress', 'Medium', 'Sarah Connor', 'frontend');
+  INSERT OR IGNORE INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date) VALUES
+    ('task-101', 'proj-1', 'Implement JWT Session Verification', 'Validate session cookies and decode tenant claims in middleware.', 'In Progress', 'High', 'Nelson Rivera', 'security', date('now', '+3 days')),
+    ('task-102', 'proj-1', 'Configure Redis Rate Limiter', 'Apply 100 req/min bucket per API key for external traffic.', 'Todo', 'Urgent', 'Devin Zhao', 'backend', date('now')),
+    ('task-103', 'proj-1', 'Database Isolation Unit Tests', 'Write integration tests ensuring zero data leak across organizations.', 'Review', 'Medium', 'Sarah Connor', 'infra', date('now', '-2 days')),
+    ('task-201', 'proj-2', 'Design Telemetry Chart Wireframes', 'Draft Figma components for latency percentiles and error rates.', 'In Progress', 'Medium', 'Sarah Connor', 'frontend', date('now', '+7 days'));
 
   -- Seed Tasks (Stark Industries)
-  INSERT OR IGNORE INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag) VALUES
-    ('task-401', 'proj-4', 'Thermal Safety Interlocks', 'Calibrate magnetic containment sensors for 100GW output spikes.', 'In Progress', 'Urgent', 'Nelson Rivera', 'infra'),
-    ('task-501', 'proj-5', 'Optimize Attention Mechanism', 'Quantize transformer weights for on-device flight helmet compute.', 'Todo', 'High', 'Devin Zhao', 'backend');
+  INSERT OR IGNORE INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date) VALUES
+    ('task-401', 'proj-4', 'Thermal Safety Interlocks', 'Calibrate magnetic containment sensors for 100GW output spikes.', 'In Progress', 'Urgent', 'Nelson Rivera', 'infra', date('now', '+1 day')),
+    ('task-501', 'proj-5', 'Optimize Attention Mechanism', 'Quantize transformer weights for on-device flight helmet compute.', 'Todo', 'High', 'Devin Zhao', 'backend', date('now', '+5 days'));
 
   -- Seed Comments
   INSERT OR IGNORE INTO devflow_comments (id, task_id, user_id, user_name, content, created_at) VALUES
@@ -157,4 +165,4 @@ database.exec(`
 
 database.close();
 
-console.log("DevFlow database schema with task tags is ready.");
+console.log("DevFlow database schema with task due dates is ready.");

@@ -213,6 +213,7 @@ export async function createTaskAction(
     (formData.get("priority") as TaskPriority | null) || "Medium";
   const assigneeName = (formData.get("assigneeName") as string | null)?.trim();
   const tag = (formData.get("tag") as TaskTag | null) || "feature";
+  const dueDate = (formData.get("dueDate") as string | null)?.trim() || null;
 
   if (!projectId || !title || !description || !assigneeName) {
     return { success: false, error: "All fields are required." };
@@ -221,8 +222,8 @@ export async function createTaskAction(
   try {
     const id = `task-${Date.now()}`;
     const stmt = db.prepare(`
-      INSERT INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -234,6 +235,7 @@ export async function createTaskAction(
       priority,
       assigneeName,
       tag,
+      dueDate,
     );
 
     const projectStmt = db.prepare(
@@ -250,7 +252,9 @@ export async function createTaskAction(
         currentUser.name,
         "created_task",
         title,
-        `[${tag.toUpperCase()}] Assigned to ${assigneeName} (${priority} priority).`,
+        `[${tag.toUpperCase()}] Assigned to ${assigneeName} (${priority} priority${
+          dueDate ? `, due ${dueDate}` : ""
+        }).`,
       );
     }
 
@@ -276,6 +280,7 @@ export async function updateTaskAction(
     (formData.get("priority") as TaskPriority | null) || "Medium";
   const assigneeName = (formData.get("assigneeName") as string | null)?.trim();
   const tag = (formData.get("tag") as TaskTag | null) || "feature";
+  const dueDate = (formData.get("dueDate") as string | null)?.trim() || null;
 
   if (!taskId || !projectId || !title || !description || !assigneeName) {
     return { success: false, error: "All fields are required." };
@@ -284,11 +289,20 @@ export async function updateTaskAction(
   try {
     const stmt = db.prepare(`
       UPDATE devflow_tasks
-      SET title = ?, description = ?, status = ?, priority = ?, assignee_name = ?, tag = ?
+      SET title = ?, description = ?, status = ?, priority = ?, assignee_name = ?, tag = ?, due_date = ?
       WHERE id = ?
     `);
 
-    stmt.run(title, description, status, priority, assigneeName, tag, taskId);
+    stmt.run(
+      title,
+      description,
+      status,
+      priority,
+      assigneeName,
+      tag,
+      dueDate,
+      taskId,
+    );
 
     const projectStmt = db.prepare(
       "SELECT org_id FROM devflow_projects WHERE id = ?",
@@ -304,7 +318,9 @@ export async function updateTaskAction(
         currentUser.name,
         "updated_task",
         title,
-        `[${tag.toUpperCase()}] Updated: ${status}, ${priority} priority, assigned to ${assigneeName}.`,
+        `[${tag.toUpperCase()}] Updated: ${status}, ${priority} priority, assigned to ${assigneeName}${
+          dueDate ? `, due ${dueDate}` : ""
+        }.`,
       );
     }
 

@@ -22,6 +22,7 @@ type TaskRow = {
   priority: TaskPriority;
   assignee_name: string;
   tag: string;
+  due_date: string | null;
   created_at: string;
 };
 
@@ -81,7 +82,7 @@ export function getProjectById(id: string): Project | undefined {
 
 export function getTasksByProjectId(projectId: string): readonly Task[] {
   const stmt = db.prepare(`
-    SELECT id, project_id, title, description, status, priority, assignee_name, tag
+    SELECT id, project_id, title, description, status, priority, assignee_name, tag, due_date
     FROM devflow_tasks
     WHERE project_id = ?
     ORDER BY created_at DESC
@@ -97,5 +98,6 @@ export function getTasksByProjectId(projectId: string): readonly Task[] {
     priority: row.priority,
     assigneeName: row.assignee_name,
     tag: (row.tag as TaskTag) || "feature",
+    dueDate: row.due_date ?? undefined,
   }));
 }

@@ -19,4 +19,5 @@ export type Task = Readonly<{
   priority: TaskPriority;
   assigneeName: string;
   tag: TaskTag;
+  dueDate?: string;
 }>;

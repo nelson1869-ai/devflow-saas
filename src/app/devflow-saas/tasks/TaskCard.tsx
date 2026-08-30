@@ -16,6 +16,7 @@ type TaskCardProps = Readonly<{
   onDelete?: (taskId: string) => void;
   onUpdateDescription?: (taskId: string, newDescription: string) => void;
   onTagClick?: (tag: string) => void;
+  onViewHistory?: (task: Task) => void;
   isDraggable?: boolean;
 }>;
 
@@ -53,6 +54,7 @@ export function TaskCard({
   onDelete,
   onUpdateDescription,
   onTagClick,
+  onViewHistory,
   isDraggable = true,
 }: TaskCardProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -188,6 +190,19 @@ export function TaskCard({
           >
             {task.priority}
           </span>
+
+          {/* View Audit History Button */}
+          {onViewHistory && (
+            <button
+              type="button"
+              onClick={() => onViewHistory(task)}
+              aria-label={`View audit history for ${task.title}`}
+              title="View Audit Timeline & History"
+              className="opacity-0 group-hover:opacity-100 transition rounded p-1 text-slate-500 hover:bg-slate-800 hover:text-cyan-300 focus:opacity-100 focus-visible:outline-2 focus-visible:outline-cyan-400"
+            >
+              📜
+            </button>
+          )}
 
           {/* Edit Task Button */}
           {onEdit && (

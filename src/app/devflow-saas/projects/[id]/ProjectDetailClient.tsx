@@ -6,6 +6,7 @@ import type { Task } from "../../tasks/types";
 import type { User } from "../../lib/auth";
 import type { TaskComment } from "../../lib/comments";
 import type { WorkspaceTag } from "../../lib/tags";
+import type { ActivityItem } from "../../lib/activity-types";
 import { ProjectTasksView } from "./ProjectTasksView";
 import { ProjectSettingsView } from "./ProjectSettingsView";
 
@@ -14,6 +15,7 @@ type ProjectDetailClientProps = Readonly<{
   initialTasks: readonly Task[];
   initialComments: readonly TaskComment[];
   workspaceTags: readonly WorkspaceTag[];
+  initialActivities: readonly ActivityItem[];
   currentUser: User;
   allUsers: readonly User[];
 }>;
@@ -29,6 +31,7 @@ export function ProjectDetailClient({
   initialTasks,
   initialComments,
   workspaceTags,
+  initialActivities,
   currentUser,
   allUsers,
 }: ProjectDetailClientProps) {
@@ -96,6 +99,7 @@ export function ProjectDetailClient({
           initialTasks={initialTasks}
           initialComments={initialComments}
           workspaceTags={workspaceTags}
+          initialActivities={initialActivities}
           currentUser={currentUser}
           allUsers={allUsers}
         />

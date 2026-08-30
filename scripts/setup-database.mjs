@@ -1,10 +1,16 @@
 import Database from "better-sqlite3";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const dbPath = path.join(__dirname, "..", "devflow.db");
+const dataDir = path.join(__dirname, "..", "data");
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+const dbPath = path.join(dataDir, "learning.db");
 
 console.log(`Setting up DevFlow SQLite database at ${dbPath}...`);
 const database = new Database(dbPath);

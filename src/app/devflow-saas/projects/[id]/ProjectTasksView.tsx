@@ -5,8 +5,10 @@ import type { Task, TaskPriority, TaskStatus } from "../../tasks/types";
 import type { User } from "../../lib/auth";
 import type { TaskComment } from "../../lib/comments";
 import type { WorkspaceTag } from "../../lib/tags";
+import type { ActivityItem } from "../../lib/activity-types";
 import { TaskCard } from "../../tasks/TaskCard";
 import { EditTaskModal } from "../../tasks/EditTaskModal";
+import { TaskAuditDrawer } from "../../tasks/TaskAuditDrawer";
 import {
   createTaskAction,
   updateTaskAction,
@@ -20,6 +22,7 @@ type ProjectTasksViewProps = Readonly<{
   initialTasks: readonly Task[];
   initialComments: readonly TaskComment[];
   workspaceTags: readonly WorkspaceTag[];
+  initialActivities?: readonly ActivityItem[];
   currentUser: User;
   allUsers: readonly User[];
 }>;
@@ -80,15 +83,19 @@ export function ProjectTasksView({
   initialTasks,
   initialComments,
   workspaceTags,
+  initialActivities = [],
   currentUser,
   allUsers,
 }: ProjectTasksViewProps) {
   const [tasks, setTasks] = useState<readonly Task[]>(initialTasks);
   const [comments, setComments] =
     useState<readonly TaskComment[]>(initialComments);
+  const [activities, setActivities] =
+    useState<readonly ActivityItem[]>(initialActivities);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [historyTask, setHistoryTask] = useState<Task | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -113,7 +120,7 @@ export function ProjectTasksView({
   const [assigneeName, setAssigneeName] = useState(currentUser.name);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Synchronize tasks and comments when server revalidates
+  // Synchronize state when server revalidates
   if (
     initialTasks !== tasks &&
     !isPending &&
@@ -128,6 +135,14 @@ export function ProjectTasksView({
     initialComments.length > comments.length
   ) {
     setComments(initialComments);
+  }
+
+  if (
+    initialActivities !== activities &&
+    !isPending &&
+    initialActivities.length > activities.length
+  ) {
+    setActivities(initialActivities);
   }
 
   const handleTagClick = (tagName: string) => {
@@ -225,12 +240,13 @@ export function ProjectTasksView({
     handleSaveTask({ ...target, description: newDescription });
   };
 
-  const handleAddComment = (content: string) => {
-    if (!editingTask) return;
+  const handleAddComment = (content: string, targetTaskId?: string) => {
+    const activeId = targetTaskId || editingTask?.id || historyTask?.id;
+    if (!activeId) return;
 
     const optimisticComment: TaskComment = {
       id: `comm-${Date.now()}`,
-      taskId: editingTask.id,
+      taskId: activeId,
       userId: currentUser.id,
       userName: currentUser.name,
       content,
@@ -239,7 +255,7 @@ export function ProjectTasksView({
     setComments((prev) => [...prev, optimisticComment]);
 
     const formData = new FormData();
-    formData.append("taskId", editingTask.id);
+    formData.append("taskId", activeId);
     formData.append("projectId", projectId);
     formData.append("content", content);
 
@@ -810,6 +826,7 @@ export function ProjectTasksView({
                           onDelete={handleDeleteTask}
                           onUpdateDescription={handleUpdateDescriptionDirectly}
                           onTagClick={handleTagClick}
+                          onViewHistory={(t) => setHistoryTask(t)}
                           isDraggable={true}
                         />
                       ))}
@@ -847,6 +864,7 @@ export function ProjectTasksView({
               onDelete={handleDeleteTask}
               onUpdateDescription={handleUpdateDescriptionDirectly}
               onTagClick={handleTagClick}
+              onViewHistory={(t) => setHistoryTask(t)}
               isDraggable={false}
             />
           ))}
@@ -865,7 +883,22 @@ export function ProjectTasksView({
           isOpen={Boolean(editingTask)}
           onClose={() => setEditingTask(null)}
           onSave={handleSaveTask}
-          onAddComment={handleAddComment}
+          onAddComment={(content) => handleAddComment(content, editingTask.id)}
+          isPending={isPending}
+        />
+      )}
+
+      {/* Task Audit History & Event Timeline Drawer */}
+      {historyTask && (
+        <TaskAuditDrawer
+          key={historyTask.id}
+          task={historyTask}
+          activities={activities}
+          comments={comments}
+          currentUser={currentUser}
+          isOpen={Boolean(historyTask)}
+          onClose={() => setHistoryTask(null)}
+          onAddComment={(content) => handleAddComment(content, historyTask.id)}
           isPending={isPending}
         />
       )}

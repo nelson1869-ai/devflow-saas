@@ -6,6 +6,7 @@ import {
 } from "../../lib/queries";
 import { getCurrentUser, getAllUsers, getCurrentOrg } from "../../lib/auth";
 import { getCommentsByProjectId } from "../../lib/comments";
+import { getActivitiesByOrgId } from "../../lib/activity";
 import { ProjectDetailClient } from "./ProjectDetailClient";
 
 type ProjectDetailPageProps = Readonly<{
@@ -47,11 +48,13 @@ export default async function ProjectDetailPage({
     );
   }
 
-  const [projectTasks, projectComments, workspaceTags] = await Promise.all([
-    getTasksByProjectId(project.id),
-    getCommentsByProjectId(project.id),
-    getTagsByOrgId(currentOrg.id),
-  ]);
+  const [projectTasks, projectComments, workspaceTags, workspaceActivities] =
+    await Promise.all([
+      getTasksByProjectId(project.id),
+      getCommentsByProjectId(project.id),
+      getTagsByOrgId(currentOrg.id),
+      getActivitiesByOrgId(currentOrg.id, 100),
+    ]);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
@@ -71,6 +74,7 @@ export default async function ProjectDetailPage({
           initialTasks={projectTasks}
           initialComments={projectComments}
           workspaceTags={workspaceTags}
+          initialActivities={workspaceActivities}
           currentUser={currentUser}
           allUsers={allUsers}
         />

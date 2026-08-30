@@ -10,6 +10,7 @@ import type { ActionResponse } from "./common";
 
 export async function createSubtaskAction(
   formData: FormData,
+  _optionalBrowserProjectId?: string,
 ): Promise<ActionResponse> {
   const taskId = (formData.get("taskId") as string | null)?.trim() || "";
   const title = (formData.get("title") as string | null)?.trim();
@@ -20,7 +21,7 @@ export async function createSubtaskAction(
     return { success: false, error: "Subtask title is required." };
   }
 
-  // 1. Enforce Tenant Scoping Guard on Task (Authoritative Project Resolution)
+  // 1. Enforce Tenant Scoping Guard on Task
   const taskGuard = await requireDemoTaskAccess(taskId);
   if (!taskGuard.authorized) {
     return { success: false, error: taskGuard.error };
@@ -29,8 +30,17 @@ export async function createSubtaskAction(
   const { currentUser, currentOrg } = taskGuard;
   const authoritativeProjectId = taskGuard.data.projectId;
 
+  // 2. Idempotency Guard: Prevent duplicate subtask creation on double-submit
+  const existingSubtask = db
+    .prepare("SELECT id FROM devflow_subtasks WHERE task_id = ? AND title = ?")
+    .get(taskId, title) as { id: string } | undefined;
+
+  if (existingSubtask) {
+    return { success: true, data: { subtaskId: existingSubtask.id } };
+  }
+
   try {
-    const id = `sub-${Date.now()}`;
+    const id = `sub-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const countStmt = db.prepare(
       "SELECT count(*) as count FROM devflow_subtasks WHERE task_id = ?",
     );
@@ -54,7 +64,7 @@ export async function createSubtaskAction(
     );
 
     revalidatePath(`/devflow-saas/projects/${authoritativeProjectId}`);
-    return { success: true };
+    return { success: true, data: { subtaskId: id } };
   } catch {
     return { success: false, error: "Failed to create subtask in database." };
   }

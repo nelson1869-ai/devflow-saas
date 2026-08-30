@@ -17,6 +17,7 @@ import type { ActionResponse } from "./common";
 
 export async function createTaskAction(
   formData: FormData,
+  _optionalBrowserProjectId?: string,
 ): Promise<ActionResponse> {
   const rawProjectId =
     (formData.get("projectId") as string | null)?.trim() || "";
@@ -60,8 +61,22 @@ export async function createTaskAction(
     validatedMilestoneId = msGuard.data.milestoneId;
   }
 
+  // 3. Idempotency Guard: Prevent duplicate tasks on double-click
+  const existingTask = db
+    .prepare(
+      "SELECT id FROM devflow_tasks WHERE project_id = ? AND title = ? AND status = ?",
+    )
+    .get(authoritativeProjectId, title, status) as { id: string } | undefined;
+
+  if (existingTask) {
+    return {
+      success: true,
+      data: { taskId: existingTask.id, isDuplicate: true },
+    };
+  }
+
   try {
-    const id = `task-${Date.now()}`;
+    const id = `task-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const stmt = db.prepare(`
       INSERT INTO devflow_tasks (id, project_id, milestone_id, title, description, status, priority, assignee_name, tag, due_date, estimated_hours)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -132,7 +147,7 @@ export async function createTaskAction(
     revalidatePath("/devflow-saas/calendar");
     revalidatePath("/devflow-saas/activity");
     revalidatePath("/devflow-saas/analytics");
-    return { success: true };
+    return { success: true, data: { taskId: id } };
   } catch {
     return { success: false, error: "Failed to create task in database." };
   }
@@ -140,6 +155,7 @@ export async function createTaskAction(
 
 export async function updateTaskAction(
   formData: FormData,
+  _optionalBrowserProjectId?: string,
 ): Promise<ActionResponse> {
   const taskId = (formData.get("taskId") as string | null)?.trim() || "";
   const rawMilestoneId =
@@ -159,14 +175,13 @@ export async function updateTaskAction(
     return { success: false, error: "All fields are required." };
   }
 
-  // 1. Enforce Tenant Scoping Guard on Task (Authoritative Project & Org Resolution)
+  // 1. Enforce Tenant Scoping Guard on Task
   const taskGuard = await requireDemoTaskAccess(taskId);
   if (!taskGuard.authorized) {
     return { success: false, error: taskGuard.error };
   }
 
   const { currentUser, currentOrg } = taskGuard;
-  // Authoritative project ID derived from database relationship (never untrusted browser input)
   const authoritativeProjectId = taskGuard.data.projectId;
 
   // 2. Validate Milestone Ownership (if assigned)

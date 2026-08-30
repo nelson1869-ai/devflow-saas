@@ -61,8 +61,22 @@ export async function createProjectAction(
     return { success: false, error: "Project key must be 2 to 6 characters." };
   }
 
+  // Idempotency Guard: Prevent duplicate project creation on double-submit
+  const existingProject = db
+    .prepare(
+      "SELECT id FROM devflow_projects WHERE org_id = ? AND (key = ? OR name = ?)",
+    )
+    .get(orgId, key, name) as { id: string } | undefined;
+
+  if (existingProject) {
+    return {
+      success: false,
+      error: `A project with key "${key}" or name "${name}" already exists in this workspace.`,
+    };
+  }
+
   try {
-    const projectId = `proj-${Date.now()}`;
+    const projectId = `proj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const stmt = db.prepare(`
       INSERT INTO devflow_projects (id, org_id, name, key, description, status, is_archived)
       VALUES (?, ?, ?, ?, ?, ?, 0)
@@ -103,7 +117,7 @@ export async function createProjectAction(
 
       for (let i = 0; i < tasksToSeed.length; i++) {
         const t = tasksToSeed[i];
-        const taskId = `task-${Date.now()}-${i + 1}`;
+        const taskId = `task-${Date.now()}-${i + 1}-${Math.random().toString(36).substring(2, 6)}`;
         let dueDate: string | null = null;
         if (t.dueDaysOffset !== undefined) {
           const d = new Date();
@@ -152,30 +166,31 @@ export async function createProjectAction(
       currentUser.name,
       "created_project",
       name,
-      `Project established with key ${key} (${status}) via AI Smart Planner.`,
+      `Project created with key ${key} (${tasksToSeed.length} starter tasks generated).`,
     );
 
     dispatchWebhookEvent(orgId, "project.created", {
       projectId,
       name,
       key,
+      description,
       status,
-      createdByName: currentUser.name,
+      starterTasksCount: tasksToSeed.length,
+      createdBy: currentUser.name,
     });
 
-    revalidatePath("/devflow-saas/projects", "layout");
-    return { success: true };
-  } catch (err: unknown) {
-    if (
-      err instanceof Error &&
-      err.message.includes("UNIQUE constraint failed")
-    ) {
-      return {
-        success: false,
-        error: `Project key "${key}" is already taken.`,
-      };
-    }
-    return { success: false, error: "Failed to create project in database." };
+    revalidatePath("/devflow-saas/projects");
+    revalidatePath("/devflow-saas", "layout");
+    revalidatePath("/devflow-saas/calendar");
+    revalidatePath("/devflow-saas/analytics");
+    return { success: true, data: { projectId } };
+  } catch (error) {
+    console.error("Failed to create project:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Database transaction failed.",
+    };
   }
 }
 

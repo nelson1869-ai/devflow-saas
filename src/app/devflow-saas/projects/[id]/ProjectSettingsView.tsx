@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useState, useTransition, useMemo, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Project, ProjectStatus } from "../types";
 import type { Task } from "../../tasks/types";
@@ -19,12 +19,34 @@ type ProjectSettingsViewProps = Readonly<{
   project: Project;
   tasks?: readonly Task[];
   currentUser: User;
+  onSwitchToBoard?: () => void;
+  onTasksAdded?: (newTasks: readonly Task[]) => void;
+  onProjectUpdated?: (updated: Project) => void;
+}>;
+
+type UpdatedSummary = Readonly<{
+  name: string;
+  key: string;
+  description: string;
+  status: ProjectStatus;
+  updatedAt: string;
+}>;
+
+type SynthesizedTaskPreview = Readonly<{
+  title: string;
+  description: string;
+  priority: string;
+  tag: string;
+  estimatedHours: number;
 }>;
 
 export function ProjectSettingsView({
   project,
   tasks = [],
   currentUser,
+  onSwitchToBoard,
+  onTasksAdded,
+  onProjectUpdated,
 }: ProjectSettingsViewProps) {
   const router = useRouter();
   const [name, setName] = useState(project.name);
@@ -36,11 +58,17 @@ export function ProjectSettingsView({
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const [updatedSummary, setUpdatedSummary] = useState<UpdatedSummary | null>(
+    null,
+  );
   const [isPending, startTransition] = useTransition();
 
   // AI Sprint Copilot State
   const [aiPhasePrompt, setAiPhasePrompt] = useState("");
   const [isGeneratingPhase, setIsGeneratingPhase] = useState(false);
+  const [recentSynthesizedTasks, setRecentSynthesizedTasks] = useState<
+    readonly SynthesizedTaskPreview[]
+  >([]);
   const [aiRetrospective, setAiRetrospective] = useState<string | null>(null);
 
   // Calculate Sprint Progress Metrics
@@ -60,6 +88,150 @@ export function ProjectSettingsView({
   const totalLoggedHours = Number(
     tasks.reduce((sum, t) => sum + (t.loggedHours || 0), 0).toFixed(1),
   );
+
+  // Live Reactive AI Suggestions
+  const { phasePlaceholder, dynamicExpansionChips } = useMemo(() => {
+    const activeTitle = name.trim() || project.name;
+    const lower = `${name} ${description}`.toLowerCase();
+
+    if (lower.includes("calc") || lower.includes("math")) {
+      return {
+        phasePlaceholder: `e.g. Add scientific trigonometry functions (sin/cos/tan), 2D function graph plotter, and export history to CSV for ${activeTitle}...`,
+        dynamicExpansionChips: [
+          {
+            icon: "📐",
+            label: "Trigonometry & Scientific Mode",
+            prompt: `Add scientific math functions (sin, cos, tan, sqrt, log, exponents) and degree/radian toggle for ${activeTitle}.`,
+          },
+          {
+            icon: "📈",
+            label: "2D Graph Plotter",
+            prompt: `Interactive 2D Canvas formula graph plotting viewport with zoom and pan for ${activeTitle}.`,
+          },
+          {
+            icon: "📤",
+            label: "Export Calculations to CSV",
+            prompt: `Export calculation logs and equation history to downloadable CSV and formatted PDF summary for ${activeTitle}.`,
+          },
+          {
+            icon: "⌨️",
+            label: "Physical NumPad Keybinds",
+            prompt: `Add full physical keyboard support for 0-9 digits, operators, Enter (=), and Escape (AC) for ${activeTitle}.`,
+          },
+          {
+            icon: "🎙️",
+            label: "Voice Command Math Input",
+            prompt: `Voice recognition math parser that converts spoken equations into calculations with audio click feedback for ${activeTitle}.`,
+          },
+        ],
+      };
+    }
+
+    if (
+      lower.includes("recipe") ||
+      lower.includes("food") ||
+      lower.includes("meal")
+    ) {
+      return {
+        phasePlaceholder: `e.g. Add barcode scanner for ingredients, macro calorie charts, and grocery store aisle sorter for ${activeTitle}...`,
+        dynamicExpansionChips: [
+          {
+            icon: "📷",
+            label: "Barcode Scanner",
+            prompt: `Mobile camera barcode scanner for automatic grocery ingredient entry and nutrition lookup for ${activeTitle}.`,
+          },
+          {
+            icon: "📊",
+            label: "Macro Calorie Radar",
+            prompt: `Interactive macro nutrient donut charts (protein, carbs, fats) and daily calorie intake goals for ${activeTitle}.`,
+          },
+          {
+            icon: "🍳",
+            label: "Fullscreen Cooking Mode",
+            prompt: `Distraction-free step-by-step cooking view with voice timer chime and dark kitchen mode for ${activeTitle}.`,
+          },
+          {
+            icon: "🛒",
+            label: "Aisle-Sorted Grocery List",
+            prompt: `Aggregate recipe ingredients into an aisle-grouped grocery shopping checklist with checkboxes for ${activeTitle}.`,
+          },
+          {
+            icon: "🖨️",
+            label: "Printable Recipe Cards",
+            prompt: `Generate beautifully styled, high-contrast printable recipe cards and PDF cookbook exports for ${activeTitle}.`,
+          },
+        ],
+      };
+    }
+
+    if (
+      lower.includes("gym") ||
+      lower.includes("workout") ||
+      lower.includes("fitness")
+    ) {
+      return {
+        phasePlaceholder: `e.g. Add countdown rest stopwatch, 1RM strength charts, and workout routine templates for ${activeTitle}...`,
+        dynamicExpansionChips: [
+          {
+            icon: "⏱️",
+            label: "Rest Countdown Stopwatch",
+            prompt: `Rest interval timer with sound bell, vibration haptics, and auto-start after set completion for ${activeTitle}.`,
+          },
+          {
+            icon: "📈",
+            label: "1RM Progression Charts",
+            prompt: `Estimated One Rep Max (1RM) progression curves and volume load analytics for ${activeTitle}.`,
+          },
+          {
+            icon: "📋",
+            label: "Custom Routine Templates",
+            prompt: `Pre-configured Push/Pull/Legs and Upper/Lower routine templates with exercise swapping for ${activeTitle}.`,
+          },
+          {
+            icon: "🏆",
+            label: "Personal Record Badges",
+            prompt: `Celebration animations and historical milestone tracking for all-time weightlifting PRs for ${activeTitle}.`,
+          },
+          {
+            icon: "📱",
+            label: "Offline Sync & Wearables",
+            prompt: `Offline SQLite synchronization and wearable heart rate sensor export support for ${activeTitle}.`,
+          },
+        ],
+      };
+    }
+
+    return {
+      phasePlaceholder: `e.g. Add real-time collaboration, export formatting, automated alerts, and analytics for ${activeTitle}...`,
+      dynamicExpansionChips: [
+        {
+          icon: "📊",
+          label: "Real-Time KPI Analytics",
+          prompt: `Real-time analytics dashboard with interactive charts, performance KPI meters, and audit telemetry for ${activeTitle}.`,
+        },
+        {
+          icon: "📤",
+          label: "Multi-Format Data Export",
+          prompt: `Export records to PDF, CSV, and shareable public links with role permissions for ${activeTitle}.`,
+        },
+        {
+          icon: "⚡",
+          label: "Automated Webhook Alerts",
+          prompt: `Automated webhook triggers, email digest notifications, and scheduled background sync for ${activeTitle}.`,
+        },
+        {
+          icon: "👥",
+          label: "Live Multi-User Collab",
+          prompt: `Real-time cursor presence, concurrent multi-user editing, and collision detection for ${activeTitle}.`,
+        },
+        {
+          icon: "🛡️",
+          label: "Enterprise RBAC Security",
+          prompt: `Multi-tenant role-based permissions matrix, security access guards, and immutable audit logs for ${activeTitle}.`,
+        },
+      ],
+    };
+  }, [name, description, project.name]);
 
   const handleUpdate = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -95,6 +267,30 @@ export function ProjectSettingsView({
     startTransition(async () => {
       const res = await updateProjectAction(formData);
       if (res.success) {
+        const updatedProject: Project = {
+          ...project,
+          name: trimmedName,
+          key: trimmedKey,
+          description: trimmedDesc,
+          status,
+        };
+
+        setUpdatedSummary({
+          name: trimmedName,
+          key: trimmedKey,
+          description: trimmedDesc,
+          status,
+          updatedAt: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          }),
+        });
+
+        if (onProjectUpdated) {
+          onProjectUpdated(updatedProject);
+        }
+
         setFeedback({
           type: "success",
           message: "Project settings successfully updated in SQLite database!",
@@ -121,7 +317,7 @@ export function ProjectSettingsView({
       .map((t) => `- ⏳ **${t.title}** (#${t.tag})`)
       .join("\n");
 
-    const retro = `### 🚀 Sprint Retrospective & Release Notes for ${project.name}
+    const retro = `### 🚀 Sprint Retrospective & Release Notes for ${name || project.name}
 **Sprint Completion:** ${completionPercentage}% (${completedTasks}/${totalTasks} Tasks Delivered)
 **Total Effort:** ${totalLoggedHours}h logged / ${totalEstimatedHours}h estimated
 
@@ -138,20 +334,28 @@ ${inProgressList || "_No tasks currently in flight._"}
     setAiRetrospective(retro);
   };
 
-  // Generate Phase 2 Tasks with AI and push to board
-  const handleGenerateNextPhase = () => {
-    if (!aiPhasePrompt.trim()) return;
+  // Generate Phase 2 Tasks with AI and push to board + show live preview
+  const handleGenerateNextPhase = (customText?: string) => {
+    const promptToUse = (customText || aiPhasePrompt).trim();
+    if (!promptToUse) return;
+
     setIsGeneratingPhase(true);
     setFeedback(null);
+    if (customText) {
+      setAiPhasePrompt(customText);
+    }
 
-    try {
-      const plan = analyzeAndGenerateProjectPlan(
-        aiPhasePrompt.trim(),
-        `Next Phase for ${project.name}`,
-      );
+    startTransition(async () => {
+      try {
+        const plan = analyzeAndGenerateProjectPlan(
+          promptToUse,
+          `Phase 2 Expansion for ${name || project.name}`,
+        );
 
-      startTransition(async () => {
-        let addedCount = 0;
+        setRecentSynthesizedTasks(plan.tasks);
+
+        const newCreatedTasks: Task[] = [];
+
         for (const task of plan.tasks) {
           const formData = new FormData();
           formData.append("projectId", project.id);
@@ -164,19 +368,38 @@ ${inProgressList || "_No tasks currently in flight._"}
           formData.append("assigneeName", currentUser.name);
 
           const res = await createTaskAction(formData);
-          if (res.success) addedCount++;
+          if (res.success) {
+            newCreatedTasks.push({
+              id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              projectId: project.id,
+              title: task.title,
+              description: task.description,
+              status: "Todo",
+              priority: task.priority,
+              tag: task.tag,
+              estimatedHours: task.estimatedHours,
+              assigneeName: currentUser.name,
+            });
+          }
         }
 
-        setAiPhasePrompt("");
-        setFeedback({
-          type: "success",
-          message: `✨ AI successfully synthesized and added ${addedCount} Phase 2 tasks to your project!`,
-        });
+        if (onTasksAdded && newCreatedTasks.length > 0) {
+          onTasksAdded(newCreatedTasks);
+        }
+
         router.refresh();
-      });
-    } finally {
-      setIsGeneratingPhase(false);
-    }
+      } catch (err) {
+        setFeedback({
+          type: "error",
+          message:
+            err instanceof Error
+              ? err.message
+              : "Failed to synthesize Phase 2 tasks.",
+        });
+      } finally {
+        setIsGeneratingPhase(false);
+      }
+    });
   };
 
   const handleToggleArchive = () => {
@@ -233,7 +456,74 @@ ${inProgressList || "_No tasks currently in flight._"}
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
-      {feedback && (
+      {/* Live Updated Summary Card */}
+      {updatedSummary && (
+        <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5 space-y-4 shadow-lg animate-in fade-in duration-200">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-emerald-500/20 pb-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">✅</span>
+              <div>
+                <h3 className="text-sm font-bold text-white">
+                  Project Settings Successfully Updated & Saved!
+                </h3>
+                <p className="text-[11px] text-emerald-300">
+                  Committed to SQLite at {updatedSummary.updatedAt}.
+                </p>
+              </div>
+            </div>
+
+            {onSwitchToBoard && (
+              <button
+                type="button"
+                onClick={onSwitchToBoard}
+                className="self-start rounded-xl bg-emerald-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-emerald-300 transition shadow-sm sm:self-auto"
+              >
+                👉 Return to Kanban Board
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs">
+            <div className="rounded-xl border border-emerald-500/20 bg-slate-950/60 p-2.5">
+              <span className="block text-[10px] text-slate-400">
+                Project Name:
+              </span>
+              <span className="font-bold text-white truncate block">
+                {updatedSummary.name}
+              </span>
+            </div>
+
+            <div className="rounded-xl border border-emerald-500/20 bg-slate-950/60 p-2.5">
+              <span className="block text-[10px] text-slate-400">
+                Project Key:
+              </span>
+              <span className="font-mono font-bold text-cyan-300">
+                {updatedSummary.key}
+              </span>
+            </div>
+
+            <div className="rounded-xl border border-emerald-500/20 bg-slate-950/60 p-2.5">
+              <span className="block text-[10px] text-slate-400">
+                Lifecycle Status:
+              </span>
+              <span className="font-semibold text-emerald-300">
+                {updatedSummary.status}
+              </span>
+            </div>
+
+            <div className="rounded-xl border border-emerald-500/20 bg-slate-950/60 p-2.5">
+              <span className="block text-[10px] text-slate-400">
+                Database State:
+              </span>
+              <span className="font-mono text-emerald-400 font-semibold">
+                ● Synced
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {feedback && !updatedSummary && (
         <div
           role="alert"
           className={[
@@ -448,23 +738,55 @@ ${inProgressList || "_No tasks currently in flight._"}
           )}
         </div>
 
-        {/* AI Phase 2 Feature Expansion */}
-        <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-4 space-y-3">
-          <h3 className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
-            <span>🚀</span>
-            <span>Synthesize Phase 2 Tasks with AI</span>
-          </h3>
-          <p className="text-[11px] text-slate-400">
-            Want to expand your project? Describe new features (e.g. *“Add
-            Stripe payment checkout, webhook listener, and customer receipts”*)
-            and AI will synthesize 5 new tasks to your board.
-          </p>
+        {/* Dynamic Project-Aware AI Phase 2 Feature Expansion */}
+        <div className="rounded-xl border border-cyan-500/30 bg-slate-950/90 p-4 space-y-4">
+          <div>
+            <h3 className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+              <span>🚀</span>
+              <span>Synthesize Phase 2 Tasks with AI</span>
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Expand{" "}
+              <strong className="text-slate-200">{name || project.name}</strong>{" "}
+              with custom Phase 2 features. AI will synthesize sequential
+              deliverables directly into your project board.
+            </p>
+          </div>
 
+          {/* 5 Dynamic 1-Click Expansion Chips */}
           <div className="space-y-2">
+            <span className="text-[11px] font-semibold text-cyan-300">
+              💡 5 Recommended Phase 2 Ideas for {name || project.name}:
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {dynamicExpansionChips.map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  disabled={isPending || isGeneratingPhase}
+                  onClick={() => handleGenerateNextPhase(chip.prompt)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-medium text-slate-200 hover:border-cyan-500/50 hover:bg-cyan-500/10 hover:text-cyan-200 transition disabled:opacity-40 shadow-xs"
+                >
+                  <span className="text-sm">{chip.icon}</span>
+                  <span>{chip.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom Feature Textarea */}
+          <div className="space-y-2 pt-1">
+            <label
+              htmlFor="custom-phase-input"
+              className="block text-[11px] font-medium text-slate-400"
+            >
+              Or type custom Phase 2 requirements:
+            </label>
             <textarea
+              id="custom-phase-input"
               rows={2}
               disabled={isPending || isGeneratingPhase}
-              placeholder="e.g. Add dark mode toggle, keyboard shortcut navigation, and data export..."
+              placeholder={phasePlaceholder}
               value={aiPhasePrompt}
               onChange={(e) => setAiPhasePrompt(e.target.value)}
               className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-xs text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
@@ -476,18 +798,70 @@ ${inProgressList || "_No tasks currently in flight._"}
                 disabled={
                   !aiPhasePrompt.trim() || isPending || isGeneratingPhase
                 }
-                onClick={handleGenerateNextPhase}
-                className="rounded-xl bg-cyan-400 px-4 py-1.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 disabled:opacity-40 transition shadow-sm flex items-center gap-1.5"
+                onClick={() => handleGenerateNextPhase()}
+                className="rounded-xl bg-cyan-400 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-300 disabled:opacity-40 transition shadow-sm flex items-center gap-1.5"
               >
                 <span>✨</span>
                 <span>
                   {isGeneratingPhase
                     ? "Synthesizing Tasks..."
-                    : "Add AI Phase Tasks"}
+                    : "Add Custom Phase Tasks"}
                 </span>
               </button>
             </div>
           </div>
+
+          {/* Live Synthesized Tasks Preview Box */}
+          {recentSynthesizedTasks.length > 0 && (
+            <div className="mt-4 rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-4 space-y-3 animate-in fade-in duration-200">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-cyan-500/20 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">✨</span>
+                  <span className="text-xs font-bold text-white">
+                    Just Created {recentSynthesizedTasks.length} Phase 2
+                    Deliverables!
+                  </span>
+                </div>
+
+                {onSwitchToBoard && (
+                  <button
+                    type="button"
+                    onClick={onSwitchToBoard}
+                    className="self-start rounded-lg bg-cyan-400 px-3 py-1.5 text-xs font-bold text-slate-950 hover:bg-cyan-300 transition shadow-sm sm:self-auto"
+                  >
+                    👉 Go to Kanban Board ({tasks.length})
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                {recentSynthesizedTasks.map((t, idx) => (
+                  <div
+                    key={t.title}
+                    className="flex items-start justify-between gap-2 rounded-lg border border-cyan-500/20 bg-slate-950/70 p-2.5 text-xs"
+                  >
+                    <div className="space-y-1">
+                      <div className="font-semibold text-slate-100">
+                        {t.title}
+                      </div>
+                      <div className="text-[11px] text-slate-400 line-clamp-1">
+                        {t.description}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="rounded bg-cyan-500/20 px-1.5 py-0.5 font-mono text-[10px] text-cyan-300">
+                        #{t.tag}
+                      </span>
+                      <span className="rounded bg-purple-500/20 px-1.5 py-0.5 font-mono text-[10px] text-purple-300">
+                        {t.estimatedHours}h
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 

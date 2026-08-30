@@ -1,6 +1,7 @@
 export type ActionResponse = Readonly<{
   success: boolean;
   error?: string;
+  data?: unknown;
 }>;
 
 export const USER_SESSION_COOKIE_NAME = "devflow_session_user_id";

@@ -21,8 +21,24 @@ export async function createSavedViewAction(
 
   if (!name) return { success: false, error: "View name is required." };
 
+  // Idempotency Guard: Prevent duplicate saved view on double-submit
+  const existingView = db
+    .prepare(
+      `
+      SELECT id FROM devflow_saved_views 
+      WHERE org_id = ? AND user_id = ? AND name = ? AND (project_id = ? OR (project_id IS NULL AND ? IS NULL))
+    `,
+    )
+    .get(currentOrg.id, currentUser.id, name, projectId, projectId) as
+    | { id: string }
+    | undefined;
+
+  if (existingView) {
+    return { success: true, data: { viewId: existingView.id } };
+  }
+
   try {
-    const id = `view-${Date.now()}`;
+    const id = `view-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const stmt = db.prepare(`
       INSERT INTO devflow_saved_views (id, org_id, user_id, project_id, name, icon, filters_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -50,7 +66,7 @@ export async function createSavedViewAction(
       revalidatePath(`/devflow-saas/projects/${projectId}`);
     }
     revalidatePath("/devflow-saas/projects");
-    return { success: true };
+    return { success: true, data: { viewId: id } };
   } catch {
     return { success: false, error: "Failed to save filter view in database." };
   }

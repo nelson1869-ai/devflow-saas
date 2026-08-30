@@ -4,24 +4,42 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "../db";
 import {
-  USER_SESSION_COOKIE_NAME,
-  ORG_SESSION_COOKIE_NAME,
+  DEMO_USER_COOKIE_NAME,
+  DEMO_ORG_COOKIE_NAME,
   THEME_ACCENT_COOKIE_NAME,
   THEME_MODE_COOKIE_NAME,
-  getCurrentUser,
+  validateUserRole,
   type ThemeAccent,
   type ThemeMode,
   type UserRole,
 } from "../auth";
 import { logActivity } from "../activity";
+import { requireDemoAdmin } from "../tenant-guard";
 import type { ActionResponse } from "./common";
 
+/**
+ * Switch the active Demo User identity. Validates that the target user ID exists in the database.
+ */
 export async function switchActiveUserAction(
   userId: string,
 ): Promise<ActionResponse> {
+  const trimmedId = userId?.trim();
+  if (!trimmedId) {
+    return { success: false, error: "Valid demo user ID is required." };
+  }
+
+  // Validate that user exists in database
+  const user = db
+    .prepare("SELECT id FROM devflow_users WHERE id = ?")
+    .get(trimmedId);
+
+  if (!user) {
+    return { success: false, error: "Selected demo user does not exist." };
+  }
+
   try {
     const cookieStore = await cookies();
-    cookieStore.set(USER_SESSION_COOKIE_NAME, userId, {
+    cookieStore.set(DEMO_USER_COOKIE_NAME, trimmedId, {
       path: "/",
       maxAge: 60 * 60 * 24 * 30, // 30 days
       sameSite: "lax",
@@ -29,16 +47,36 @@ export async function switchActiveUserAction(
     revalidatePath("/devflow-saas");
     return { success: true };
   } catch {
-    return { success: false, error: "Failed to switch user" };
+    return { success: false, error: "Failed to switch demo user." };
   }
 }
 
+/**
+ * Switch the active Demo Organization workspace. Validates that the target org ID exists in the database.
+ */
 export async function switchActiveOrgAction(
   orgId: string,
 ): Promise<ActionResponse> {
+  const trimmedId = orgId?.trim();
+  if (!trimmedId) {
+    return { success: false, error: "Valid demo workspace ID is required." };
+  }
+
+  // Validate that organization exists in database
+  const org = db
+    .prepare("SELECT id FROM devflow_organizations WHERE id = ?")
+    .get(trimmedId);
+
+  if (!org) {
+    return {
+      success: false,
+      error: "Selected demo organization does not exist.",
+    };
+  }
+
   try {
     const cookieStore = await cookies();
-    cookieStore.set(ORG_SESSION_COOKIE_NAME, orgId, {
+    cookieStore.set(DEMO_ORG_COOKIE_NAME, trimmedId, {
       path: "/",
       maxAge: 60 * 60 * 24 * 30, // 30 days
       sameSite: "lax",
@@ -46,7 +84,7 @@ export async function switchActiveOrgAction(
     revalidatePath("/devflow-saas");
     return { success: true };
   } catch {
-    return { success: false, error: "Failed to switch workspace" };
+    return { success: false, error: "Failed to switch workspace." };
   }
 }
 
@@ -63,7 +101,7 @@ export async function switchAccentColorAction(
     revalidatePath("/devflow-saas");
     return { success: true };
   } catch {
-    return { success: false, error: "Failed to update theme accent" };
+    return { success: false, error: "Failed to update theme accent." };
   }
 }
 
@@ -80,18 +118,28 @@ export async function setThemeModeAction(
     revalidatePath("/devflow-saas");
     return { success: true };
   } catch {
-    return { success: false, error: "Failed to update theme mode" };
+    return { success: false, error: "Failed to update theme mode." };
   }
 }
 
 export async function updateUserRoleAction(
   targetUserId: string,
-  newRole: UserRole,
+  newRoleInput: string | UserRole,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  if (currentUser.role !== "Admin") {
-    return { success: false, error: "Only Admins can change user roles." };
+  // 1. Enforce Admin Role Check
+  const adminGuard = await requireDemoAdmin();
+  if (!adminGuard.authorized) {
+    return { success: false, error: adminGuard.error };
   }
+
+  // 2. Enforce Runtime Role Validation against strict allowlist
+  const roleValidation = validateUserRole(newRoleInput);
+  if (!roleValidation.valid || !roleValidation.role) {
+    return { success: false, error: roleValidation.error };
+  }
+
+  const validRole = roleValidation.role;
+  const { currentUser, currentOrg } = adminGuard;
 
   try {
     const userStmt = db.prepare("SELECT name FROM devflow_users WHERE id = ?");
@@ -101,20 +149,17 @@ export async function updateUserRoleAction(
     if (!targetUser) return { success: false, error: "User not found." };
 
     db.prepare("UPDATE devflow_users SET role = ? WHERE id = ?").run(
-      newRole,
+      validRole,
       targetUserId,
     );
 
-    const cookieStore = await cookies();
-    const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
-
     logActivity(
-      orgId,
+      currentOrg.id,
       undefined,
       currentUser.name,
       "updated_user",
       targetUser.name,
-      `Changed role to "${newRole}".`,
+      `Changed role to "${validRole}".`,
     );
 
     revalidatePath("/devflow-saas");
@@ -127,22 +172,29 @@ export async function updateUserRoleAction(
 export async function inviteTeamMemberAction(
   formData: FormData,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  if (currentUser.role !== "Admin") {
-    return {
-      success: false,
-      error: "Only Admins can invite new team members.",
-    };
+  // 1. Enforce Admin Role Check
+  const adminGuard = await requireDemoAdmin();
+  if (!adminGuard.authorized) {
+    return { success: false, error: adminGuard.error };
   }
+
+  const { currentUser, currentOrg } = adminGuard;
 
   const name = (formData.get("name") as string | null)?.trim();
   const email = (formData.get("email") as string | null)?.trim().toLowerCase();
-  const role = ((formData.get("role") as string | null)?.trim() ||
-    "Member") as UserRole;
+  const rawRole = (formData.get("role") as string | null)?.trim() || "Member";
 
   if (!name || !email) {
     return { success: false, error: "Name and email are required." };
   }
+
+  // 2. Enforce Runtime Role Validation
+  const roleValidation = validateUserRole(rawRole);
+  if (!roleValidation.valid || !roleValidation.role) {
+    return { success: false, error: roleValidation.error };
+  }
+
+  const validRole = roleValidation.role;
 
   try {
     const existing = db
@@ -161,18 +213,15 @@ export async function inviteTeamMemberAction(
       INSERT INTO devflow_users (id, name, email, role)
       VALUES (?, ?, ?, ?)
     `,
-    ).run(id, name, email, role);
-
-    const cookieStore = await cookies();
-    const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
+    ).run(id, name, email, validRole);
 
     logActivity(
-      orgId,
+      currentOrg.id,
       undefined,
       currentUser.name,
       "invited_user",
       name,
-      `Invited ${name} (${email}) with role "${role}".`,
+      `Invited ${name} (${email}) with role "${validRole}".`,
     );
 
     revalidatePath("/devflow-saas");

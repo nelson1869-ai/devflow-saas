@@ -2,24 +2,32 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "../db";
-import { getCurrentUser } from "../auth";
 import { logActivity } from "../activity";
 import { runAutomationsForTrigger } from "../automations";
+import { requireDemoTaskAccess } from "../tenant-guard";
+import { getDemoCurrentOrg } from "../auth";
 import type { ActionResponse } from "./common";
 
 export async function createSubtaskAction(
   formData: FormData,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  const taskId = (formData.get("taskId") as string | null)?.trim();
-  const projectId = (formData.get("projectId") as string | null)?.trim();
+  const taskId = (formData.get("taskId") as string | null)?.trim() || "";
   const title = (formData.get("title") as string | null)?.trim();
   const assigneeName =
     (formData.get("assigneeName") as string | null)?.trim() || null;
 
-  if (!taskId || !projectId || !title) {
+  if (!taskId || !title) {
     return { success: false, error: "Subtask title is required." };
   }
+
+  // 1. Enforce Tenant Scoping Guard on Task (Authoritative Project Resolution)
+  const taskGuard = await requireDemoTaskAccess(taskId);
+  if (!taskGuard.authorized) {
+    return { success: false, error: taskGuard.error };
+  }
+
+  const { currentUser, currentOrg } = taskGuard;
+  const authoritativeProjectId = taskGuard.data.projectId;
 
   try {
     const id = `sub-${Date.now()}`;
@@ -35,29 +43,17 @@ export async function createSubtaskAction(
     `);
     stmt.run(id, taskId, title, assigneeName, position);
 
-    const taskStmt = db.prepare("SELECT title FROM devflow_tasks WHERE id = ?");
-    const task = taskStmt.get(taskId) as { title: string } | undefined;
-
-    const projectStmt = db.prepare(
-      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    logActivity(
+      currentOrg.id,
+      authoritativeProjectId,
+      currentUser.name,
+      "updated_task",
+      taskGuard.data.taskTitle,
+      `Added subtask: "${title}".`,
+      taskId,
     );
-    const project = projectStmt.get(projectId) as
-      | { org_id: string }
-      | undefined;
 
-    if (project && task) {
-      logActivity(
-        project.org_id,
-        projectId,
-        currentUser.name,
-        "updated_task",
-        task.title,
-        `Added subtask: "${title}".`,
-        taskId,
-      );
-    }
-
-    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath(`/devflow-saas/projects/${authoritativeProjectId}`);
     return { success: true };
   } catch {
     return { success: false, error: "Failed to create subtask in database." };
@@ -67,66 +63,74 @@ export async function createSubtaskAction(
 export async function toggleSubtaskStatusAction(
   subtaskId: string,
   isCompleted: boolean,
-  projectId: string,
+  _optionalBrowserProjectId?: string,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
+  const currentOrg = await getDemoCurrentOrg();
+
   try {
+    const subStmt = db.prepare(`
+      SELECT s.title, t.title as task_title, s.task_id, p.id as project_id, p.org_id
+      FROM devflow_subtasks s
+      JOIN devflow_tasks t ON t.id = s.task_id
+      JOIN devflow_projects p ON p.id = t.project_id
+      WHERE s.id = ? AND p.org_id = ?
+    `);
+    const sub = subStmt.get(subtaskId, currentOrg.id) as
+      | {
+          title: string;
+          task_title: string;
+          task_id: string;
+          project_id: string;
+          org_id: string;
+        }
+      | undefined;
+
+    if (!sub) {
+      return {
+        success: false,
+        error: "Subtask not found in active workspace.",
+      };
+    }
+
     const stmt = db.prepare(
       "UPDATE devflow_subtasks SET is_completed = ? WHERE id = ?",
     );
     stmt.run(isCompleted ? 1 : 0, subtaskId);
 
-    const subStmt = db.prepare(`
-      SELECT s.title, t.title as task_title, s.task_id
-      FROM devflow_subtasks s
-      JOIN devflow_tasks t ON t.id = s.task_id
-      WHERE s.id = ?
-    `);
-    const sub = subStmt.get(subtaskId) as
-      | { title: string; task_title: string; task_id: string }
-      | undefined;
+    const currentUser = await (await import("../auth")).getDemoCurrentUser();
 
-    const projectStmt = db.prepare(
-      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    logActivity(
+      currentOrg.id,
+      sub.project_id,
+      currentUser.name,
+      "updated_task",
+      sub.task_title,
+      `Marked subtask "${sub.title}" as ${isCompleted ? "completed" : "incomplete"}.`,
+      sub.task_id,
     );
-    const project = projectStmt.get(projectId) as
-      | { org_id: string }
-      | undefined;
 
-    if (project && sub) {
-      logActivity(
-        project.org_id,
-        projectId,
-        currentUser.name,
-        "updated_task",
-        sub.task_title,
-        `Marked subtask "${sub.title}" as ${isCompleted ? "completed" : "incomplete"}.`,
-        sub.task_id,
-      );
+    if (isCompleted) {
+      const pendingRes = db
+        .prepare(
+          "SELECT count(*) as pending FROM devflow_subtasks WHERE task_id = ? AND is_completed = 0",
+        )
+        .get(sub.task_id) as { pending: number };
 
-      if (isCompleted) {
-        const pendingRes = db
-          .prepare(
-            "SELECT count(*) as pending FROM devflow_subtasks WHERE task_id = ? AND is_completed = 0",
-          )
-          .get(sub.task_id) as { pending: number };
-
-        if (pendingRes?.pending === 0) {
-          await runAutomationsForTrigger(
-            project.org_id,
-            "all_subtasks_completed",
-            {
-              taskId: sub.task_id,
-              projectId,
-              taskTitle: sub.task_title,
-              currentUserName: currentUser.name,
-            },
-          );
-        }
+      if (pendingRes?.pending === 0) {
+        await runAutomationsForTrigger(
+          currentOrg.id,
+          "all_subtasks_completed",
+          {
+            taskId: sub.task_id,
+            projectId: sub.project_id,
+            taskTitle: sub.task_title,
+            currentUserName: currentUser.name,
+          },
+        );
       }
     }
 
-    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath(`/devflow-saas/projects/${sub.project_id}`);
     return { success: true };
   } catch {
     return { success: false, error: "Failed to update subtask status." };
@@ -135,43 +139,51 @@ export async function toggleSubtaskStatusAction(
 
 export async function deleteSubtaskAction(
   subtaskId: string,
-  projectId: string,
+  _optionalBrowserProjectId?: string,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
+  const currentOrg = await getDemoCurrentOrg();
+
   try {
     const subStmt = db.prepare(`
-      SELECT s.title, t.title as task_title, s.task_id
+      SELECT s.title, t.title as task_title, s.task_id, p.id as project_id, p.org_id
       FROM devflow_subtasks s
       JOIN devflow_tasks t ON t.id = s.task_id
-      WHERE s.id = ?
+      JOIN devflow_projects p ON p.id = t.project_id
+      WHERE s.id = ? AND p.org_id = ?
     `);
-    const sub = subStmt.get(subtaskId) as
-      | { title: string; task_title: string; task_id: string }
+    const sub = subStmt.get(subtaskId, currentOrg.id) as
+      | {
+          title: string;
+          task_title: string;
+          task_id: string;
+          project_id: string;
+          org_id: string;
+        }
       | undefined;
+
+    if (!sub) {
+      return {
+        success: false,
+        error: "Subtask not found in active workspace.",
+      };
+    }
 
     const stmt = db.prepare("DELETE FROM devflow_subtasks WHERE id = ?");
     stmt.run(subtaskId);
 
-    const projectStmt = db.prepare(
-      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    const currentUser = await (await import("../auth")).getDemoCurrentUser();
+
+    logActivity(
+      currentOrg.id,
+      sub.project_id,
+      currentUser.name,
+      "updated_task",
+      sub.task_title,
+      `Removed subtask: "${sub.title}".`,
+      sub.task_id,
     );
-    const project = projectStmt.get(projectId) as
-      | { org_id: string }
-      | undefined;
 
-    if (project && sub) {
-      logActivity(
-        project.org_id,
-        projectId,
-        currentUser.name,
-        "updated_task",
-        sub.task_title,
-        `Removed subtask: "${sub.title}".`,
-        sub.task_id,
-      );
-    }
-
-    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath(`/devflow-saas/projects/${sub.project_id}`);
     return { success: true };
   } catch {
     return { success: false, error: "Failed to delete subtask." };

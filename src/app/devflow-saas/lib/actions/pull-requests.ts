@@ -2,17 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "../db";
-import { getCurrentUser } from "../auth";
 import { logActivity } from "../activity";
 import { runAutomationsForTrigger } from "../automations";
+import { requireDemoTaskAccess } from "../tenant-guard";
+import { getDemoCurrentOrg } from "../auth";
 import type { ActionResponse } from "./common";
 
 export async function linkTaskPullRequestAction(
   formData: FormData,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  const taskId = (formData.get("taskId") as string | null)?.trim();
-  const projectId = (formData.get("projectId") as string | null)?.trim();
+  const taskId = (formData.get("taskId") as string | null)?.trim() || "";
   const rawUrl = (formData.get("prUrl") as string | null)?.trim() || "";
   const rawTitle = (formData.get("prTitle") as string | null)?.trim();
   const rawBranch = (formData.get("branchName") as string | null)?.trim();
@@ -22,12 +21,21 @@ export async function linkTaskPullRequestAction(
     10,
   );
 
-  if (!taskId || !projectId || (!rawUrl && !rawTitle)) {
+  if (!taskId || (!rawUrl && !rawTitle)) {
     return {
       success: false,
-      error: "Task ID, project ID, and PR Title or URL are required.",
+      error: "Task ID and PR Title or URL are required.",
     };
   }
+
+  // 1. Enforce Tenant Scoping Guard on Task (Authoritative Project Resolution)
+  const taskGuard = await requireDemoTaskAccess(taskId);
+  if (!taskGuard.authorized) {
+    return { success: false, error: taskGuard.error };
+  }
+
+  const { currentUser, currentOrg } = taskGuard;
+  const authoritativeProjectId = taskGuard.data.projectId;
 
   // Parse GitHub URL (e.g. https://github.com/nelson1869-ai/devflow-saas/pull/1)
   let repo = rawRepo || "acme/cloud-api";
@@ -112,29 +120,17 @@ export async function linkTaskPullRequestAction(
       deletions,
     );
 
-    const taskStmt = db.prepare("SELECT title FROM devflow_tasks WHERE id = ?");
-    const task = taskStmt.get(taskId) as { title: string } | undefined;
-
-    const projectStmt = db.prepare(
-      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    logActivity(
+      currentOrg.id,
+      authoritativeProjectId,
+      currentUser.name,
+      "updated_task",
+      taskGuard.data.taskTitle,
+      `Linked GitHub Pull Request #${prNumber}: "${title}".`,
+      taskId,
     );
-    const project = projectStmt.get(projectId) as
-      | { org_id: string }
-      | undefined;
 
-    if (project && task) {
-      logActivity(
-        project.org_id,
-        projectId,
-        currentUser.name,
-        "updated_task",
-        task.title,
-        `Linked GitHub Pull Request #${prNumber}: "${title}".`,
-        taskId,
-      );
-    }
-
-    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath(`/devflow-saas/projects/${authoritativeProjectId}`);
     return { success: true };
   } catch {
     return { success: false, error: "Failed to link pull request." };
@@ -143,17 +139,21 @@ export async function linkTaskPullRequestAction(
 
 export async function mergeTaskPullRequestAction(
   prId: string,
-  projectId: string,
+  _optionalBrowserProjectId?: string,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
+  const currentOrg = await getDemoCurrentOrg();
+  const currentUser = await (await import("../auth")).getDemoCurrentUser();
+
   try {
+    // Strict Tenant-Scoped PR lookup with authoritative project_id resolution
     const prStmt = db.prepare(`
-      SELECT pr.id, pr.pr_number, pr.pr_title, pr.pr_url, pr.repository, pr.branch_name, pr.task_id, t.title as task_title
+      SELECT pr.id, pr.pr_number, pr.pr_title, pr.pr_url, pr.repository, pr.branch_name, pr.task_id, t.title as task_title, p.id as project_id, p.org_id
       FROM devflow_task_prs pr
       JOIN devflow_tasks t ON t.id = pr.task_id
-      WHERE pr.id = ?
+      JOIN devflow_projects p ON p.id = t.project_id
+      WHERE pr.id = ? AND p.org_id = ?
     `);
-    const pr = prStmt.get(prId) as
+    const pr = prStmt.get(prId, currentOrg.id) as
       | {
           id: string;
           pr_number: number;
@@ -163,12 +163,18 @@ export async function mergeTaskPullRequestAction(
           branch_name: string;
           task_id: string;
           task_title: string;
+          project_id: string;
+          org_id: string;
         }
       | undefined;
 
-    if (!pr) return { success: false, error: "Pull Request not found." };
+    if (!pr) {
+      return {
+        success: false,
+        error: "Pull Request not found in active workspace.",
+      };
+    }
 
-    // 1. If GITHUB_TOKEN is configured and PR is on GitHub, dispatch live merge to GitHub API
     const ghToken = process.env.GITHUB_TOKEN;
     if (ghToken && pr.pr_url.includes("github.com")) {
       const match = pr.pr_url.match(
@@ -206,44 +212,32 @@ export async function mergeTaskPullRequestAction(
 
     const now = new Date().toISOString();
 
-    // 2. Mark PR as merged in SQLite
     db.prepare(
       "UPDATE devflow_task_prs SET status = 'merged', merged_at = ? WHERE id = ?",
     ).run(now, prId);
 
-    // 3. Auto-close / transition parent task to Done!
     db.prepare("UPDATE devflow_tasks SET status = 'Done' WHERE id = ?").run(
       pr.task_id,
     );
 
-    const projectStmt = db.prepare(
-      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    logActivity(
+      currentOrg.id,
+      pr.project_id,
+      currentUser.name,
+      "updated_task_status",
+      pr.task_title,
+      `🚀 Merged PR #${pr.pr_number} ("${pr.pr_title}"). Task automatically moved to Done!`,
+      pr.task_id,
     );
-    const project = projectStmt.get(projectId) as
-      | { org_id: string }
-      | undefined;
 
-    if (project) {
-      logActivity(
-        project.org_id,
-        projectId,
-        currentUser.name,
-        "updated_task_status",
-        pr.task_title,
-        `🚀 Merged PR #${pr.pr_number} ("${pr.pr_title}"). Task automatically moved to Done!`,
-        pr.task_id,
-      );
+    await runAutomationsForTrigger(currentOrg.id, "task_status_done", {
+      taskId: pr.task_id,
+      projectId: pr.project_id,
+      taskTitle: pr.task_title,
+      currentUserName: currentUser.name,
+    });
 
-      // Trigger Workflow Automation for task_status_done
-      await runAutomationsForTrigger(project.org_id, "task_status_done", {
-        taskId: pr.task_id,
-        projectId,
-        taskTitle: pr.task_title,
-        currentUserName: currentUser.name,
-      });
-    }
-
-    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath(`/devflow-saas/projects/${pr.project_id}`);
     return { success: true };
   } catch {
     return { success: false, error: "Failed to merge pull request." };
@@ -252,48 +246,51 @@ export async function mergeTaskPullRequestAction(
 
 export async function unlinkTaskPullRequestAction(
   prId: string,
-  projectId: string,
+  _optionalBrowserProjectId?: string,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
+  const currentOrg = await getDemoCurrentOrg();
+  const currentUser = await (await import("../auth")).getDemoCurrentUser();
+
   try {
     const prStmt = db.prepare(`
-      SELECT pr.id, pr.pr_number, pr.pr_title, pr.task_id, t.title as task_title
+      SELECT pr.id, pr.pr_number, pr.pr_title, pr.task_id, t.title as task_title, p.id as project_id, p.org_id
       FROM devflow_task_prs pr
       JOIN devflow_tasks t ON t.id = pr.task_id
-      WHERE pr.id = ?
+      JOIN devflow_projects p ON p.id = t.project_id
+      WHERE pr.id = ? AND p.org_id = ?
     `);
-    const pr = prStmt.get(prId) as
+    const pr = prStmt.get(prId, currentOrg.id) as
       | {
           id: string;
           pr_number: number;
           pr_title: string;
           task_id: string;
           task_title: string;
+          project_id: string;
+          org_id: string;
         }
       | undefined;
 
-    db.prepare("DELETE FROM devflow_task_prs WHERE id = ?").run(prId);
-
-    const projectStmt = db.prepare(
-      "SELECT org_id FROM devflow_projects WHERE id = ?",
-    );
-    const project = projectStmt.get(projectId) as
-      | { org_id: string }
-      | undefined;
-
-    if (project && pr) {
-      logActivity(
-        project.org_id,
-        projectId,
-        currentUser.name,
-        "updated_task",
-        pr.task_title,
-        `Unlinked Pull Request #${pr.pr_number}.`,
-        pr.task_id,
-      );
+    if (!pr) {
+      return {
+        success: false,
+        error: "Pull Request not found in active workspace.",
+      };
     }
 
-    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    db.prepare("DELETE FROM devflow_task_prs WHERE id = ?").run(prId);
+
+    logActivity(
+      currentOrg.id,
+      pr.project_id,
+      currentUser.name,
+      "updated_task",
+      pr.task_title,
+      `Unlinked Pull Request #${pr.pr_number}.`,
+      pr.task_id,
+    );
+
+    revalidatePath(`/devflow-saas/projects/${pr.project_id}`);
     return { success: true };
   } catch {
     return { success: false, error: "Failed to unlink pull request." };

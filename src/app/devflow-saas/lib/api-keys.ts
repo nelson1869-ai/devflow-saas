@@ -1,6 +1,12 @@
-import "server-only";
 import crypto from "node:crypto";
 import { db } from "./db";
+import {
+  SUPPORTED_API_SCOPES,
+  validateApiScopes,
+  type ApiScope,
+} from "./security-core";
+
+export { SUPPORTED_API_SCOPES, validateApiScopes, type ApiScope };
 
 export type ApiKey = Readonly<{
   id: string;
@@ -9,10 +15,10 @@ export type ApiKey = Readonly<{
   userName?: string;
   name: string;
   keyPrefix: string;
-  scopes: readonly string[];
-  lastUsedAt?: string;
-  expiresAt?: string;
+  scopes: readonly ApiScope[];
   isActive: boolean;
+  expiresAt?: string;
+  lastUsedAt?: string;
   createdAt: string;
 }>;
 
@@ -23,15 +29,29 @@ type ApiKeyRow = {
   user_name: string | null;
   name: string;
   key_prefix: string;
-  key_hash: string;
   scopes: string;
-  last_used_at: string | null;
-  expires_at: string | null;
   is_active: number;
+  expires_at: string | null;
+  last_used_at: string | null;
   created_at: string;
 };
 
+export function generateRawApiKey(): {
+  rawKey: string;
+  keyPrefix: string;
+  keyHash: string;
+} {
+  const randomBytes = crypto.randomBytes(24).toString("hex");
+  const rawKey = `df_live_${randomBytes}`;
+  const keyPrefix = rawKey.slice(0, 15);
+  const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
+
+  return { rawKey, keyPrefix, keyHash };
+}
+
 export function getApiKeysByOrgId(orgId: string): readonly ApiKey[] {
+  if (!orgId) return [];
+
   const stmt = db.prepare(`
     SELECT
       k.id,
@@ -40,7 +60,6 @@ export function getApiKeysByOrgId(orgId: string): readonly ApiKey[] {
       u.name as user_name,
       k.name,
       k.key_prefix,
-      k.key_hash,
       k.scopes,
       k.last_used_at,
       k.expires_at,
@@ -63,7 +82,9 @@ export function getApiKeysByOrgId(orgId: string): readonly ApiKey[] {
     scopes: r.scopes
       .split(",")
       .map((s) => s.trim())
-      .filter(Boolean),
+      .filter((s): s is ApiScope =>
+        SUPPORTED_API_SCOPES.includes(s as ApiScope),
+      ),
     lastUsedAt: r.last_used_at ?? undefined,
     expiresAt: r.expires_at ?? undefined,
     isActive: Boolean(r.is_active),
@@ -71,9 +92,14 @@ export function getApiKeysByOrgId(orgId: string): readonly ApiKey[] {
   }));
 }
 
+export const getApiKeysByOrg = getApiKeysByOrgId;
+
+/**
+ * Validate incoming API key against SHA-256 hash in SQLite, checking active status, expiry, and scope.
+ */
 export function validateApiKeyAndScope(
   rawKey: string,
-  requiredScope?: string,
+  requiredScope?: ApiScope,
 ): { valid: boolean; orgId?: string; userId?: string; error?: string } {
   if (!rawKey || !rawKey.startsWith("df_live_")) {
     return {
@@ -118,10 +144,7 @@ export function validateApiKeyAndScope(
 
   if (requiredScope) {
     const grantedScopes = row.scopes.split(",").map((s) => s.trim());
-    if (
-      !grantedScopes.includes(requiredScope) &&
-      !grantedScopes.includes("admin")
-    ) {
+    if (!grantedScopes.includes(requiredScope)) {
       return {
         valid: false,
         error: `Missing required scope permission: "${requiredScope}".`,
@@ -129,7 +152,6 @@ export function validateApiKeyAndScope(
     }
   }
 
-  // Update last_used_at timestamp
   db.prepare(
     "UPDATE devflow_api_keys SET last_used_at = datetime('now') WHERE id = ?",
   ).run(row.id);

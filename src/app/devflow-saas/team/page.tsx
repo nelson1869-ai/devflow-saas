@@ -9,7 +9,7 @@ export default async function TeamPage() {
   ]);
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
+    <main className="mx-auto max-w-7xl px-4 py-8 text-slate-100 sm:px-8 sm:py-10">
       <TeamDirectoryClient
         allUsers={allUsers}
         currentUser={currentUser}

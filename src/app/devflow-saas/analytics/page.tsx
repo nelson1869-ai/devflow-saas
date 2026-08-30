@@ -18,7 +18,7 @@ export default async function AnalyticsPage() {
   ]);
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
+    <main className="mx-auto max-w-7xl px-4 py-8 text-slate-100 sm:px-8 sm:py-10">
       <div className="space-y-10">
         {/* Header */}
         <header className="flex flex-col gap-4 border-b border-slate-800/80 pb-6 sm:flex-row sm:items-center sm:justify-between">

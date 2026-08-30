@@ -77,7 +77,7 @@ export default async function ActivityPage() {
   const activities = getActivitiesByOrgId(currentOrg.id);
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10 text-slate-100 sm:px-8">
+    <main className="mx-auto max-w-7xl px-4 py-8 text-slate-100 sm:px-8 sm:py-10">
       {/* Header */}
       <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>

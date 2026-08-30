@@ -204,7 +204,7 @@ export function ProjectsView({
   const archivedCount = projects.filter((p) => p.isArchived).length;
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
+    <main className="mx-auto max-w-7xl px-4 py-8 text-slate-100 sm:px-8 sm:py-10">
       <div className="space-y-10">
         <header className="flex flex-col gap-4 border-b border-slate-800/80 pb-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
@@ -228,118 +228,80 @@ export function ProjectsView({
               "focus-visible:outline-2 focus-visible:outline-cyan-400",
               isFormOpen
                 ? "border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
-                : "bg-cyan-400 text-slate-950 hover:bg-cyan-300 shadow-sm",
+                : "bg-cyan-400 text-slate-950 hover:bg-cyan-300",
             ].join(" ")}
           >
             {isFormOpen ? "Cancel" : "+ New Project"}
           </button>
         </header>
 
-        {/* Collapsible Create Project Form with Templates */}
+        {/* Create Project Form with Starter Templates */}
         {isFormOpen && (
           <section
             aria-labelledby="create-project-heading"
-            className="rounded-2xl border border-cyan-500/30 bg-slate-900/90 p-6 shadow-xl"
+            className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-6 shadow-sm ring-1 ring-cyan-500/20"
           >
-            <h2
-              id="create-project-heading"
-              className="text-base font-semibold text-white"
-            >
-              Create New Project in {currentOrg.name}
-            </h2>
-
-            {formError && (
-              <div
-                role="alert"
-                className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
-              >
-                {formError}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateProject} className="mt-5 space-y-6">
-              {/* Template Selector Cards */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Select Project Template
-                </label>
-                <div className="mt-2.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {projectTemplates.map((template) => {
-                    const isSelected = selectedTemplateId === template.id;
-                    return (
-                      <button
-                        key={template.id}
-                        type="button"
-                        onClick={() => handleSelectTemplate(template)}
-                        className={[
-                          "flex flex-col items-start rounded-xl border p-3.5 text-left transition shadow-sm",
-                          isSelected
-                            ? "border-cyan-400 bg-cyan-500/10 ring-2 ring-cyan-400/30"
-                            : "border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-950",
-                        ].join(" ")}
-                      >
-                        <div className="flex w-full items-center justify-between">
-                          <span className="text-xl">{template.icon}</span>
-                          <span
-                            className={[
-                              "rounded px-1.5 py-0.5 text-[9px] font-mono font-bold",
-                              template.badgeColor,
-                            ].join(" ")}
-                          >
-                            {template.defaultKey}
-                          </span>
-                        </div>
-
-                        <p className="mt-2 font-bold text-white text-xs">
-                          {template.name}
-                        </p>
-                        <p className="mt-1 text-[11px] text-slate-400 leading-tight">
-                          {template.description}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
+                <h2
+                  id="create-project-heading"
+                  className="text-base font-semibold text-white"
+                >
+                  Create New Engineering Project
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Select a starter framework template or build a customized
+                  workflow from scratch.
+                </p>
               </div>
+              <span className="rounded-full bg-cyan-500/10 px-2.5 py-1 text-xs font-medium text-cyan-300">
+                {activeTemplate?.name || "Custom"}
+              </span>
+            </div>
 
-              {/* Starter Tasks Scaffolding Preview */}
-              {activeTemplate && activeTemplate.starterTasks.length > 0 && (
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-slate-300">
-                      ⚡ Starter Tasks Scaffolding (
-                      {activeTemplate.starterTasks.length} tasks will be
-                      auto-generated)
-                    </p>
-                    <span className="text-[10px] font-mono text-cyan-400">
-                      Auto-populated in SQLite
-                    </span>
-                  </div>
+            {/* Template Selector Carousel / Grid */}
+            <div className="mt-4 space-y-2">
+              <label className="block text-xs font-medium text-slate-300">
+                Starter Templates
+              </label>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {projectTemplates.map((template) => {
+                  const isSelected = selectedTemplateId === template.id;
+                  return (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => handleSelectTemplate(template)}
+                      className={[
+                        "flex flex-col items-start rounded-xl border p-3 text-left transition",
+                        isSelected
+                          ? "border-cyan-400 bg-cyan-500/10 shadow-sm"
+                          : "border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-900/60",
+                      ].join(" ")}
+                    >
+                      <span className="text-xl">{template.icon}</span>
+                      <span className="mt-1 text-xs font-bold text-slate-200">
+                        {template.name}
+                      </span>
+                      <span className="text-[10px] text-slate-400 line-clamp-2">
+                        {template.description}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                  <ul className="mt-2.5 space-y-1.5">
-                    {activeTemplate.starterTasks.map((st, i) => (
-                      <li
-                        key={i}
-                        className="flex items-center justify-between rounded-lg border border-slate-800/80 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-300"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-[10px] text-cyan-400">
-                            #{st.tag}
-                          </span>
-                          <span className="font-medium text-white">
-                            {st.title}
-                          </span>
-                        </div>
-                        <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
-                          {st.priority} Priority
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+            <form onSubmit={handleCreateProject} className="mt-6 space-y-4">
+              {formError && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-300"
+                >
+                  {formError}
                 </div>
               )}
 
-              {/* Project Fields */}
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="sm:col-span-2">
                   <label
@@ -353,7 +315,7 @@ export function ProjectsView({
                     type="text"
                     required
                     disabled={isPending}
-                    placeholder="e.g. Billing Service"
+                    placeholder="e.g. Core Infrastructure Migration"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"

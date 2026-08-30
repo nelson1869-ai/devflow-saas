@@ -18,8 +18,8 @@ import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { ThemeAccentPicker } from "./components/ThemeAccentPicker";
 import { ThemeModePicker } from "./components/ThemeModePicker";
 import { NotificationBell } from "./components/NotificationBell";
-import { NavSettingsDropdown } from "./components/NavSettingsDropdown";
 import { MobileNavDrawer } from "./components/MobileNavDrawer";
+import { MainNavLinks } from "./components/MainNavLinks";
 
 type DevFlowLayoutProps = Readonly<{
   children: ReactNode;
@@ -172,44 +172,8 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
               <span className="hidden sm:inline">DevFlow</span>
             </Link>
 
-            <nav
-              aria-label="Main Navigation"
-              className="hidden items-center gap-5 sm:flex"
-            >
-              <Link
-                href="/devflow-saas"
-                className="text-xs font-medium text-slate-300 transition hover:text-white"
-              >
-                Overview
-              </Link>
-              <Link
-                href="/devflow-saas/projects"
-                className="text-xs font-medium text-slate-300 transition hover:text-white"
-              >
-                Projects
-              </Link>
-              <Link
-                href="/devflow-saas/calendar"
-                className="text-xs font-medium text-slate-300 transition hover:text-white"
-              >
-                Calendar
-              </Link>
-              <Link
-                href="/devflow-saas/activity"
-                className="text-xs font-medium text-slate-300 transition hover:text-white"
-              >
-                Activity
-              </Link>
-              <Link
-                href="/devflow-saas/analytics"
-                className="text-xs font-medium text-slate-300 transition hover:text-white"
-              >
-                Analytics
-              </Link>
-
-              {/* Pro Settings & Tools Dropdown */}
-              <NavSettingsDropdown />
-            </nav>
+            {/* Desktop Navigation Links with Active Indicator */}
+            <MainNavLinks />
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5">

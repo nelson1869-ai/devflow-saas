@@ -24,17 +24,22 @@ const typeIcons: Record<NotificationType, string> = {
 export function NotificationBell({
   notifications: initialNotifications,
 }: NotificationBellProps) {
-  const [notifications, setNotifications] =
-    useState<readonly AppNotification[]>(initialNotifications);
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState<FilterType>("all");
+  const [readIds, setReadIds] = useState<ReadonlySet<string>>(new Set());
+  const [isAllReadLocally, setIsAllReadLocally] = useState(false);
   const [isPending, startTransition] = useTransition();
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Sync state with server revalidations
-  useEffect(() => {
-    setNotifications(initialNotifications);
-  }, [initialNotifications]);
+  // Pure React 19 State Derivation
+  const notifications = useMemo(() => {
+    return initialNotifications.map((n) => {
+      if (isAllReadLocally || readIds.has(n.id)) {
+        return { ...n, isRead: true };
+      }
+      return n;
+    });
+  }, [initialNotifications, readIds, isAllReadLocally]);
 
   // Click outside listener
   useEffect(() => {
@@ -52,10 +57,10 @@ export function NotificationBell({
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-  const handleMarkAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
-    );
+  const handleMarkAsRead = (id: string, e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    setReadIds((prev) => new Set([...prev, id]));
 
     startTransition(async () => {
       await markNotificationAsReadAction(id);
@@ -63,7 +68,7 @@ export function NotificationBell({
   };
 
   const handleMarkAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    setIsAllReadLocally(true);
 
     startTransition(async () => {
       await markAllNotificationsAsReadAction();
@@ -183,7 +188,7 @@ export function NotificationBell({
                       setIsOpen(false);
                     }}
                     className={[
-                      "flex items-start gap-3 p-3.5 transition text-left text-xs",
+                      "group flex items-start gap-3 p-3.5 transition text-left text-xs",
                       notif.isRead
                         ? "text-slate-400 hover:bg-slate-800/40"
                         : "bg-cyan-500/5 text-slate-200 hover:bg-cyan-500/10",
@@ -193,7 +198,7 @@ export function NotificationBell({
 
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="font-semibold text-white text-xs">
+                        <p className="font-semibold text-white text-xs group-hover:text-cyan-300 transition-colors">
                           {notif.title}
                         </p>
                         <time className="text-[10px] text-slate-500 whitespace-nowrap">
@@ -207,15 +212,29 @@ export function NotificationBell({
                     </div>
 
                     {!notif.isRead && (
-                      <span
-                        aria-label="Unread notification"
-                        className="mt-1.5 h-2 w-2 rounded-full bg-cyan-400 ring-2 ring-cyan-400/20"
+                      <button
+                        type="button"
+                        onClick={(e) => handleMarkAsRead(notif.id, e)}
+                        title="Mark as read"
+                        aria-label="Mark as read"
+                        className="mt-1.5 h-2 w-2 rounded-full bg-cyan-400 ring-2 ring-cyan-400/20 hover:scale-150 transition-transform"
                       />
                     )}
                   </Link>
                 );
               })
             )}
+          </div>
+
+          {/* Footer */}
+          <div className="border-t border-slate-800 bg-slate-950/60 p-2.5 text-center">
+            <Link
+              href="/devflow-saas/activity"
+              onClick={() => setIsOpen(false)}
+              className="text-[11px] font-medium text-slate-400 hover:text-cyan-300 transition"
+            >
+              View Full Activity Stream →
+            </Link>
           </div>
         </div>
       )}

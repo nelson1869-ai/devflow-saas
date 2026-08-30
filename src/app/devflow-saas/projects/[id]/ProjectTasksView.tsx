@@ -310,7 +310,7 @@ export function ProjectTasksView({
 
       {/* Advanced Filter Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
-        <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
+        <div className="relative min-w-45 flex-1 sm:max-w-xs">
           <input
             type="search"
             placeholder="Search tasks or assignees..."

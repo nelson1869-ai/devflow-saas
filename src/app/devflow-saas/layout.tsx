@@ -64,6 +64,12 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
               >
                 Activity
               </Link>
+              <Link
+                href="/devflow-saas/analytics"
+                className="text-xs font-medium text-slate-300 transition hover:text-cyan-400 focus-visible:outline-2 focus-visible:outline-cyan-400"
+              >
+                Analytics
+              </Link>
             </nav>
           </div>
 

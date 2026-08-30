@@ -80,6 +80,18 @@ export function CommandPalette({
     });
 
     items.push({
+      id: "nav-analytics",
+      category: "Navigation",
+      title: "Go to Velocity & Analytics",
+      subtitle: "View delivery charts and workload meters",
+      icon: "📈",
+      onSelect: () => {
+        router.push("/devflow-saas/analytics");
+        setIsOpen(false);
+      },
+    });
+
+    items.push({
       id: "nav-activity",
       category: "Navigation",
       title: "Go to Activity & Audit Feed",

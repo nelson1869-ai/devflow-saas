@@ -41,7 +41,7 @@ export function CommandPalette({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [, startTransition] = useTransition();
 
-  // Pure React 19 Client-Mounting (0 cascading renders)
+  // Pure React 19 Client-Mounting
   const isMounted = useSyncExternalStore(
     subscribe,
     () => true,
@@ -91,6 +91,18 @@ export function CommandPalette({
       icon: "📊",
       onSelect: () => {
         router.push("/devflow-saas/projects");
+        setIsOpen(false);
+      },
+    });
+
+    items.push({
+      id: "nav-team",
+      category: "Navigation",
+      title: "Go to Team & Access Control",
+      subtitle: "Manage engineers, invitations, and workspace roles",
+      icon: "👥",
+      onSelect: () => {
+        router.push("/devflow-saas/team");
         setIsOpen(false);
       },
     });
@@ -203,7 +215,7 @@ export function CommandPalette({
       role="dialog"
       aria-modal="true"
       aria-label="Command Palette"
-      className="fixed inset-0 z-9999 flex items-start justify-center p-4 pt-20 sm:pt-28"
+      className="fixed inset-0 z-[9999] flex items-start justify-center p-4 pt-20 sm:pt-28"
     >
       {/* Backdrop */}
       <div

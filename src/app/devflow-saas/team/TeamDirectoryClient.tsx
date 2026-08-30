@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import Image from "next/image";
 import type { User, UserRole, Organization } from "../lib/auth";
 import { updateUserRoleAction, inviteTeamMemberAction } from "../lib/actions";
 
@@ -348,11 +347,12 @@ export function TeamDirectoryClient({
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         {user.avatarUrl ? (
-                          <Image
+                          /* Standard img prevents external hostname config errors */
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
                             src={user.avatarUrl}
                             alt={user.name}
-                            width={32}
-                            height={32}
+                            referrerPolicy="no-referrer"
                             className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-700"
                           />
                         ) : (

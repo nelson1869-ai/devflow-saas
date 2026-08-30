@@ -19,6 +19,10 @@ const shortcutGroups: readonly ShortcutCategory[] = [
       { keys: ["⌘", "K"], description: "Open Command Palette & Global Search" },
       { keys: ["?"], description: "Open this Keyboard Shortcuts Cheat Sheet" },
       { keys: ["G", "P"], description: "Go to Projects Dashboard" },
+      {
+        keys: ["G", "T"],
+        description: "Go to Team Directory & Access Control",
+      },
       { keys: ["G", "A"], description: "Go to Workspace Activity Log" },
       {
         keys: ["G", "V"],
@@ -61,7 +65,7 @@ export function KeyboardShortcutsModal() {
     time: 0,
   });
 
-  // Pure React 19 Client-Mounting (0 cascading renders)
+  // Pure React 19 Client-Mounting
   const isMounted = useSyncExternalStore(
     subscribe,
     () => true,
@@ -105,6 +109,10 @@ export function KeyboardShortcutsModal() {
           e.preventDefault();
           router.push("/devflow-saas/projects");
           setIsOpen(false);
+        } else if (pressed === "t") {
+          e.preventDefault();
+          router.push("/devflow-saas/team");
+          setIsOpen(false);
         } else if (pressed === "a") {
           e.preventDefault();
           router.push("/devflow-saas/activity");
@@ -133,7 +141,7 @@ export function KeyboardShortcutsModal() {
       role="dialog"
       aria-modal="true"
       aria-labelledby="shortcuts-heading"
-      className="fixed inset-0 z-9999 flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto"
     >
       {/* Full Screen Backdrop */}
       <div

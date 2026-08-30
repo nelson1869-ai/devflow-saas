@@ -12,7 +12,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const results = searchWorkspace(currentOrg.id, q || "");
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10 text-slate-100 sm:px-8">
+    <main className="mx-auto max-w-7xl px-4 py-8 text-slate-100 sm:px-8 sm:py-10">
       <SearchClient
         initialQuery={q || ""}
         results={results}

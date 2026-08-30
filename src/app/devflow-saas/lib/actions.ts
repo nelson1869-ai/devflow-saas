@@ -369,6 +369,16 @@ export async function createProjectAction(
           t.tag,
           dueDate,
         );
+
+        logActivity(
+          orgId,
+          projectId,
+          currentUser.name,
+          "created_task",
+          t.title,
+          `[${t.tag.toUpperCase()}] Scaffolded from ${template.name} (${t.priority} priority).`,
+          taskId,
+        );
       }
     }
 
@@ -564,6 +574,7 @@ export async function createTaskAction(
         `[${tag.toUpperCase()}] Assigned to ${assigneeName} (${priority} priority${
           dueDate ? `, due ${dueDate}` : ""
         }).`,
+        id,
       );
 
       // Notify assignee if assigned to someone else
@@ -647,6 +658,7 @@ export async function updateTaskAction(
         `[${tag.toUpperCase()}] Updated: ${status}, ${priority} priority, assigned to ${assigneeName}${
           dueDate ? `, due ${dueDate}` : ""
         }.`,
+        taskId,
       );
     }
 
@@ -697,6 +709,7 @@ export async function updateTaskStatusAction(
         "updated_task_status",
         task.title,
         `Stage moved to ${newStatus}.`,
+        taskId,
       );
     }
 
@@ -737,6 +750,7 @@ export async function deleteTaskAction(
         "deleted_task",
         task.title,
         "Task permanently removed.",
+        taskId,
       );
     }
 
@@ -793,6 +807,7 @@ export async function createCommentAction(
         "updated_task",
         task.title,
         `Added note: "${content.slice(0, 50)}${content.length > 50 ? "..." : ""}"`,
+        taskId,
       );
 
       // Notify task assignee if someone else comments

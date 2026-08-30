@@ -89,6 +89,26 @@ export function IntegrationsClient({
     setWebhooks(initialWebhooks);
   }
 
+  // 1-Click Preset Card Click Handler
+  const handleSelectPresetCard = (preset: WebhookServicePreset) => {
+    setServicePreset(preset);
+    if (preset === "slack") {
+      setName("Slack #engineering Alerts");
+      setTargetUrl("https://hooks.slack.com/services/T000/B000/XXXX");
+    } else if (preset === "discord") {
+      setName("Discord Dev Notifications");
+      setTargetUrl("https://discord.com/api/webhooks/12345/abcdef");
+    } else if (preset === "github") {
+      setName("GitHub Actions Dispatcher");
+      setTargetUrl("https://api.github.com/repos/org/repo/dispatches");
+    } else {
+      setName("Custom API Webhook");
+      setTargetUrl("https://api.example.com/webhooks/devflow");
+    }
+    setFormError(null);
+    setIsCreateOpen(true);
+  };
+
   const handleCreateWebhook = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
@@ -160,10 +180,10 @@ export function IntegrationsClient({
     });
   };
 
-  const handleDeleteWebhook = (webhookId: string, hookName: string) => {
+  const handleDeleteWebhook = (webhookId: string) => {
     if (!isAdmin) return;
     const confirmed = window.confirm(
-      `Are you sure you want to delete webhook endpoint "${hookName}"?`,
+      "Are you sure you want to remove this webhook endpoint?",
     );
     if (!confirmed) return;
 
@@ -181,13 +201,13 @@ export function IntegrationsClient({
     });
   };
 
-  const handleTestPing = (webhookId: string) => {
+  const handleTestDispatch = (webhookId: string) => {
     startTransition(async () => {
       const res = await testDispatchWebhookAction(webhookId);
       if (!res.success) {
-        alert(res.error || "Failed to send test ping.");
+        alert(res.error || "Failed to dispatch test payload.");
       } else {
-        alert("⚡ Test Ping dispatched successfully! Check the Delivery Log.");
+        alert("✓ Test webhook payload dispatched successfully!");
       }
     });
   };
@@ -228,7 +248,14 @@ export function IntegrationsClient({
           {isAdmin && (
             <button
               type="button"
-              onClick={() => setIsCreateOpen(true)}
+              onClick={() => {
+                setName("");
+                setTargetUrl("");
+                setServicePreset("slack");
+                setEventType("all");
+                setFormError(null);
+                setIsCreateOpen(true);
+              }}
               className="inline-flex items-center justify-center rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 shadow-sm transition focus-visible:outline-2 focus-visible:outline-cyan-400"
             >
               + Add Webhook Endpoint
@@ -236,50 +263,101 @@ export function IntegrationsClient({
           )}
         </header>
 
-        {/* Integration Preset Cards */}
+        {/* Clickable Integration Preset Cards */}
         <section aria-labelledby="presets-heading" className="space-y-3">
-          <h2
-            id="presets-heading"
-            className="text-xs font-semibold uppercase tracking-wider text-slate-400"
-          >
-            Supported Integration Presets
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2
+              id="presets-heading"
+              className="text-xs font-semibold uppercase tracking-wider text-slate-400"
+            >
+              Supported Integration Presets (Click to Connect)
+            </h2>
+            <span className="text-[11px] text-cyan-400 font-mono">
+              1-click setup ➔
+            </span>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-1.5">
-              <span className="text-xl">💬</span>
-              <p className="text-sm font-bold text-white">
+            {/* Slack Card */}
+            <button
+              type="button"
+              onClick={() => handleSelectPresetCard("slack")}
+              className="text-left rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-1.5 transition hover:border-amber-400/50 hover:bg-slate-900/80 hover:shadow-lg hover:shadow-amber-950/20 group cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xl">💬</span>
+                <span className="text-[10px] font-bold text-amber-400 opacity-0 group-hover:opacity-100 transition">
+                  + Connect
+                </span>
+              </div>
+              <p className="text-sm font-bold text-white group-hover:text-amber-300 transition">
                 Slack Incoming Webhooks
               </p>
               <p className="text-xs text-slate-400">
                 Post formatted message cards into #engineering channels.
               </p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-1.5">
-              <span className="text-xl">🎮</span>
-              <p className="text-sm font-bold text-white">Discord Webhooks</p>
+            </button>
+
+            {/* Discord Card */}
+            <button
+              type="button"
+              onClick={() => handleSelectPresetCard("discord")}
+              className="text-left rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-1.5 transition hover:border-indigo-400/50 hover:bg-slate-900/80 hover:shadow-lg hover:shadow-indigo-950/20 group cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xl">🎮</span>
+                <span className="text-[10px] font-bold text-indigo-400 opacity-0 group-hover:opacity-100 transition">
+                  + Connect
+                </span>
+              </div>
+              <p className="text-sm font-bold text-white group-hover:text-indigo-300 transition">
+                Discord Webhooks
+              </p>
               <p className="text-xs text-slate-400">
                 Deliver stage changes and release notifications to Discord
                 servers.
               </p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-1.5">
-              <span className="text-xl">🐙</span>
-              <p className="text-sm font-bold text-white">
+            </button>
+
+            {/* GitHub Card */}
+            <button
+              type="button"
+              onClick={() => handleSelectPresetCard("github")}
+              className="text-left rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-1.5 transition hover:border-purple-400/50 hover:bg-slate-900/80 hover:shadow-lg hover:shadow-purple-950/20 group cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xl">🐙</span>
+                <span className="text-[10px] font-bold text-purple-400 opacity-0 group-hover:opacity-100 transition">
+                  + Connect
+                </span>
+              </div>
+              <p className="text-sm font-bold text-white group-hover:text-purple-300 transition">
                 GitHub Actions Trigger
               </p>
               <p className="text-xs text-slate-400">
                 Trigger repository workflows on task completion milestones.
               </p>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-1.5">
-              <span className="text-xl">🌐</span>
-              <p className="text-sm font-bold text-white">
+            </button>
+
+            {/* Custom HTTPS Card */}
+            <button
+              type="button"
+              onClick={() => handleSelectPresetCard("custom")}
+              className="text-left rounded-xl border border-slate-800 bg-slate-900/40 p-4 space-y-1.5 transition hover:border-cyan-400/50 hover:bg-slate-900/80 hover:shadow-lg hover:shadow-cyan-950/20 group cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xl">🌐</span>
+                <span className="text-[10px] font-bold text-cyan-400 opacity-0 group-hover:opacity-100 transition">
+                  + Connect
+                </span>
+              </div>
+              <p className="text-sm font-bold text-white group-hover:text-cyan-300 transition">
                 Custom HTTPS Gateway
               </p>
               <p className="text-xs text-slate-400">
                 Full JSON event payload dispatch with HMAC security signatures.
               </p>
-            </div>
+            </button>
           </div>
         </section>
 
@@ -300,169 +378,245 @@ export function IntegrationsClient({
           </span>
         </div>
 
-        {/* Webhooks List */}
-        <section aria-labelledby="webhooks-list-heading" className="space-y-4">
-          <h2 id="webhooks-list-heading" className="sr-only">
-            Configured Webhooks
+        {/* Webhook Endpoints List */}
+        <section aria-labelledby="endpoints-heading" className="space-y-4">
+          <h2
+            id="endpoints-heading"
+            className="text-xs font-semibold uppercase tracking-wider text-slate-400"
+          >
+            Configured Webhooks ({filteredWebhooks.length})
           </h2>
 
           {filteredWebhooks.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-800 p-12 text-center">
-              <span className="text-3xl">🔗</span>
-              <p className="mt-2 text-sm text-slate-400">
-                No webhook endpoints configured in {currentOrg.name}.
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-12 text-center text-slate-500">
+              <p className="text-sm">No webhook endpoints configured yet.</p>
+              <p className="mt-1 text-xs">
+                Click any preset card above or &ldquo;+ Add Webhook
+                Endpoint&rdquo; to start streaming real-time events.
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-4">
               {filteredWebhooks.map((hook) => {
-                const preset =
+                const badge =
                   presetBadges[hook.servicePreset] || presetBadges.custom;
                 const deliveries = initialDeliveries[hook.id] || [];
                 const lastDelivery = deliveries[0];
 
                 return (
-                  <div
+                  <article
                     key={hook.id}
-                    className={[
-                      "flex flex-col gap-4 rounded-2xl border p-5 transition shadow-sm sm:flex-row sm:items-center sm:justify-between",
-                      hook.isActive
-                        ? "border-slate-800/80 bg-slate-900/60"
-                        : "border-slate-800/40 bg-slate-950/40 opacity-60",
-                    ].join(" ")}
+                    className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-sm transition hover:border-slate-700"
                   >
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2.5">
-                        <span
-                          className={[
-                            "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold shadow-sm",
-                            preset.style,
-                          ].join(" ")}
-                        >
-                          <span>{preset.icon}</span>
-                          <span>{preset.label}</span>
-                        </span>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${badge.style}`}
+                          >
+                            <span>{badge.icon}</span>
+                            <span>{badge.label}</span>
+                          </span>
 
-                        <h3 className="font-bold text-white text-sm">
-                          {hook.name}
-                        </h3>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              hook.isActive
+                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                            }`}
+                          >
+                            {hook.isActive ? "ACTIVE" : "PAUSED"}
+                          </span>
 
-                        <span
-                          className={[
-                            "rounded px-2 py-0.5 text-[10px] font-mono font-semibold uppercase",
-                            hook.isActive
-                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                              : "bg-slate-800 text-slate-400 border border-slate-700",
-                          ].join(" ")}
-                        >
-                          {hook.isActive ? "🟢 Active" : "⏸️ Paused"}
-                        </span>
+                          <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-300">
+                            {eventTypeLabels[hook.eventType]}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h3 className="text-base font-bold text-white">
+                            {hook.name}
+                          </h3>
+                          <p className="mt-0.5 font-mono text-xs text-slate-400 break-all select-all">
+                            {hook.targetUrl}
+                          </p>
+                        </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                        <span className="font-mono truncate max-w-xs text-slate-300">
-                          {hook.targetUrl}
-                        </span>
-                        <span>•</span>
-                        <span className="text-cyan-300">
-                          {eventTypeLabels[hook.eventType]}
-                        </span>
-                        {lastDelivery && (
-                          <>
-                            <span>•</span>
-                            <span className="text-slate-400">
-                              Last Ping:{" "}
-                              <span className="text-emerald-400 font-mono">
-                                {lastDelivery.responseStatus} OK
-                              </span>{" "}
-                              ({lastDelivery.durationMs}ms)
-                            </span>
-                          </>
+                      {/* Endpoint Action Buttons */}
+                      <div className="flex flex-wrap items-center gap-2 sm:self-center">
+                        <button
+                          type="button"
+                          disabled={isPending || !hook.isActive}
+                          onClick={() => handleTestDispatch(hook.id)}
+                          className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-700 disabled:opacity-40"
+                          title="Trigger a live sample JSON payload dispatch"
+                        >
+                          ⚡ Test Payload
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setInspectingWebhook(hook)}
+                          className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-300 transition hover:bg-cyan-500/20"
+                        >
+                          📜 Delivery History ({deliveries.length})
+                        </button>
+
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() =>
+                              handleToggleStatus(hook.id, hook.isActive)
+                            }
+                            className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:bg-slate-700"
+                          >
+                            {hook.isActive ? "Pause" : "Activate"}
+                          </button>
+                        )}
+
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            disabled={isPending}
+                            onClick={() => handleDeleteWebhook(hook.id)}
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-500/20 hover:text-rose-300 transition"
+                            title="Delete Webhook"
+                          >
+                            ✕
+                          </button>
                         )}
                       </div>
                     </div>
 
-                    {/* Actions Toolbar */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      {/* Test Ping */}
-                      <button
-                        type="button"
-                        disabled={isPending || !hook.isActive}
-                        onClick={() => handleTestPing(hook.id)}
-                        title="Send simulated test event payload"
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40 transition"
-                      >
-                        <span>⚡</span>
-                        <span>Test Ping</span>
-                      </button>
-
-                      {/* Delivery Logs */}
-                      <button
-                        type="button"
-                        onClick={() => setInspectingWebhook(hook)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition"
-                      >
-                        <span>📜</span>
-                        <span>Logs ({deliveries.length})</span>
-                      </button>
-
-                      {/* Toggle Active / Pause */}
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          disabled={isPending}
-                          onClick={() =>
-                            handleToggleStatus(hook.id, hook.isActive)
-                          }
-                          className="rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800 transition"
-                        >
-                          {hook.isActive ? "Pause" : "Enable"}
-                        </button>
-                      )}
-
-                      {/* Delete */}
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          disabled={isPending}
-                          onClick={() =>
-                            handleDeleteWebhook(hook.id, hook.name)
-                          }
-                          aria-label={`Delete ${hook.name}`}
-                          className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400 transition"
-                        >
-                          🗑️
-                        </button>
-                      )}
+                    {/* Last Delivery Status Footer */}
+                    <div className="mt-4 flex flex-wrap items-center justify-between border-t border-slate-800/80 pt-3 text-[11px] text-slate-400">
+                      <div>
+                        {lastDelivery ? (
+                          <span className="flex items-center gap-1.5">
+                            <span
+                              className={`h-2 w-2 rounded-full ${
+                                lastDelivery.responseStatus >= 200 &&
+                                lastDelivery.responseStatus < 300
+                                  ? "bg-emerald-400"
+                                  : "bg-rose-400"
+                              }`}
+                            />
+                            <span>
+                              Last delivery status:{" "}
+                              <strong className="text-slate-200">
+                                {lastDelivery.responseStatus}
+                              </strong>{" "}
+                              ({lastDelivery.durationMs}ms) •{" "}
+                              {lastDelivery.deliveredAt}
+                            </span>
+                          </span>
+                        ) : (
+                          <span>No deliveries recorded yet.</span>
+                        )}
+                      </div>
+                      <span className="font-mono text-slate-500">
+                        Created: {hook.createdAt}
+                      </span>
                     </div>
-                  </div>
+                  </article>
                 );
               })}
             </div>
           )}
         </section>
 
-        {/* Create Webhook Modal */}
+        {/* Delivery Logs Modal / Drawer */}
+        {inspectingWebhook && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+          >
+            <div className="relative w-full max-w-2xl rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    <span>📜 Delivery History</span>
+                    <span className="text-xs font-mono text-cyan-400">
+                      {inspectingWebhook.name}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Real-time audit log of HTTP dispatches, payloads, and
+                    response codes.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInspectingWebhook(null)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {activeDeliveries.length === 0 ? (
+                <p className="text-xs text-slate-500 py-6 text-center italic">
+                  No payloads dispatched to this endpoint yet. Click &ldquo;⚡
+                  Test Payload&rdquo; to send a test event.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {activeDeliveries.map((dl) => (
+                    <div
+                      key={dl.id}
+                      className="rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 space-y-2 text-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`rounded px-2 py-0.5 text-[10px] font-bold ${
+                              dl.responseStatus >= 200 &&
+                              dl.responseStatus < 300
+                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                            }`}
+                          >
+                            HTTP {dl.responseStatus}
+                          </span>
+                          <span className="font-mono text-slate-300">
+                            {dl.eventType}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 font-mono">
+                          {dl.deliveredAt} • {dl.durationMs}ms
+                        </span>
+                      </div>
+
+                      <div className="rounded-lg bg-slate-900 p-2.5 font-mono text-[11px] text-cyan-300 overflow-x-auto">
+                        <pre>{dl.payloadJson}</pre>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Add Webhook Modal */}
         {isCreateOpen && (
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
           >
-            <div
-              onClick={() => setIsCreateOpen(false)}
-              className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
-            />
-
-            <div className="relative z-10 w-full max-w-lg rounded-2xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl space-y-5">
+            <div className="relative w-full max-w-md rounded-2xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h2 className="text-base font-bold text-white">
-                  Add Outbound Webhook Endpoint
-                </h2>
+                <h3 className="text-base font-bold text-white">
+                  Add Webhook Endpoint
+                </h3>
                 <button
                   type="button"
                   onClick={() => setIsCreateOpen(false)}
-                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                  className="text-slate-400 hover:text-white"
                 >
                   ✕
                 </button>
@@ -475,91 +629,74 @@ export function IntegrationsClient({
               )}
 
               <form onSubmit={handleCreateWebhook} className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label
-                      htmlFor="webhook-name"
-                      className="block text-xs font-medium text-slate-300"
-                    >
-                      Endpoint Name
-                    </label>
-                    <input
-                      id="webhook-name"
-                      type="text"
-                      required
-                      placeholder="e.g. #engineering-feed"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="service-preset"
-                      className="block text-xs font-medium text-slate-300"
-                    >
-                      Integration Preset
-                    </label>
-                    <select
-                      id="service-preset"
-                      value={servicePreset}
-                      onChange={(e) =>
-                        setServicePreset(e.target.value as WebhookServicePreset)
-                      }
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
-                    >
-                      <option value="slack">💬 Slack Incoming Webhook</option>
-                      <option value="discord">🎮 Discord Channel</option>
-                      <option value="github">🐙 GitHub Actions Gateway</option>
-                      <option value="custom">🌐 Custom HTTPS URL</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300">
+                    Integration Service Preset
+                  </label>
+                  <select
+                    value={servicePreset}
+                    onChange={(e) =>
+                      setServicePreset(e.target.value as WebhookServicePreset)
+                    }
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
+                  >
+                    <option value="slack">💬 Slack Incoming Webhook</option>
+                    <option value="discord">🎮 Discord Webhook</option>
+                    <option value="github">🐙 GitHub Actions Trigger</option>
+                    <option value="custom">🌐 Custom HTTPS Gateway</option>
+                  </select>
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="target-url"
-                    className="block text-xs font-medium text-slate-300"
-                  >
-                    Target Webhook URL
+                  <label className="block text-xs font-medium text-slate-300">
+                    Endpoint Name
                   </label>
                   <input
-                    id="target-url"
-                    type="url"
+                    type="text"
                     required
-                    placeholder="https://hooks.slack.com/services/..."
-                    value={targetUrl}
-                    onChange={(e) => setTargetUrl(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Slack Engineering Alerts"
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="event-type"
-                    className="block text-xs font-medium text-slate-300"
-                  >
-                    Trigger Event Filter
+                  <label className="block text-xs font-medium text-slate-300">
+                    Target Webhook URL
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    value={targetUrl}
+                    onChange={(e) => setTargetUrl(e.target.value)}
+                    placeholder="https://hooks.slack.com/services/..."
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300">
+                    Event Subscription
                   </label>
                   <select
-                    id="event-type"
                     value={eventType}
                     onChange={(e) =>
                       setEventType(e.target.value as WebhookEventType)
                     }
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
                   >
                     <option value="all">⚡ All Workspace Events</option>
-                    <option value="task.created">📋 Only Task Created</option>
+                    <option value="task.created">📋 Task Created</option>
                     <option value="task.status_changed">
-                      🔄 Only Task Stage Changes
+                      🔄 Task Stage Shifted
                     </option>
-                    <option value="task.completed">
-                      ✅ Only Task Completed
-                    </option>
+                    <option value="task.completed">✅ Task Completed</option>
                     <option value="project.created">
-                      📁 Only Project Established
+                      📁 Project Established
+                    </option>
+                    <option value="project.archived">
+                      📦 Project Archived
                     </option>
                   </select>
                 </div>
@@ -577,86 +714,10 @@ export function IntegrationsClient({
                     disabled={isPending || !name.trim() || !targetUrl.trim()}
                     className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-40 transition"
                   >
-                    {isPending ? "Configuring..." : "Add Endpoint"}
+                    {isPending ? "Saving..." : "Save Endpoint"}
                   </button>
                 </div>
               </form>
-            </div>
-          </div>
-        )}
-
-        {/* Deliveries Log Inspector Drawer */}
-        {inspectingWebhook && (
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="fixed inset-0 z-50 flex justify-end"
-          >
-            <div
-              onClick={() => setInspectingWebhook(null)}
-              className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
-            />
-
-            <div className="relative z-10 flex h-full w-full max-w-xl flex-col border-l border-slate-800 bg-slate-900 p-6 shadow-2xl overflow-y-auto space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                <div>
-                  <h2 className="text-base font-bold text-white">
-                    Delivery Log Inspector
-                  </h2>
-                  <p className="text-xs text-cyan-300 font-mono">
-                    {inspectingWebhook.name} ({inspectingWebhook.targetUrl})
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setInspectingWebhook(null)}
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {activeDeliveries.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-800 p-8 text-center">
-                  <p className="text-xs text-slate-500">
-                    No deliveries recorded for this endpoint yet. Click
-                    &quot;Test Ping&quot; to simulate a webhook dispatch.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {activeDeliveries.map((del) => (
-                    <div
-                      key={del.id}
-                      className="rounded-xl border border-slate-800 bg-slate-950 p-4 space-y-2.5"
-                    >
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded bg-emerald-500/10 px-2 py-0.5 font-mono font-bold text-emerald-400 border border-emerald-500/30">
-                            {del.responseStatus} OK
-                          </span>
-                          <span className="font-mono text-cyan-400">
-                            {del.eventType}
-                          </span>
-                        </div>
-                        <span className="text-[11px] text-slate-500">
-                          {del.durationMs}ms • {del.deliveredAt}
-                        </span>
-                      </div>
-
-                      {/* JSON Payload Inspector */}
-                      <div>
-                        <span className="text-[10px] uppercase font-semibold text-slate-400">
-                          Payload JSON:
-                        </span>
-                        <pre className="mt-1 rounded-lg border border-slate-800/80 bg-slate-900/90 p-3 font-mono text-[11px] text-slate-300 overflow-x-auto">
-                          {del.payloadJson}
-                        </pre>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         )}

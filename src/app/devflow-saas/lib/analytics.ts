@@ -2,32 +2,6 @@ import "server-only";
 import { db } from "./db";
 import type { TaskPriority, TaskStatus } from "../tasks/types";
 
-export type CapacityLevel =
-  | "Overloaded"
-  | "At Capacity"
-  | "Optimal"
-  | "Available";
-
-export type MemberCapacityMetric = Readonly<{
-  userId: string;
-  name: string;
-  email: string;
-  role: string;
-  avatarUrl?: string;
-  totalTasks: number;
-  openTasks: number;
-  completedTasks: number;
-  urgentTasks: number;
-  highTasks: number;
-  mediumTasks: number;
-  lowTasks: number;
-  overdueTasks: number;
-  dueSoonTasks: number;
-  capacityLevel: CapacityLevel;
-  efficiency: number;
-  activeProjects: readonly string[];
-}>;
-
 export type WorkspaceAnalytics = Readonly<{
   totalProjects: number;
   totalTasks: number;
@@ -36,7 +10,6 @@ export type WorkspaceAnalytics = Readonly<{
   reviewTasks: number;
   todoTasks: number;
   urgentTasks: number;
-  overdueTasksCount: number;
   completionRate: number;
   stageBreakdown: readonly {
     status: TaskStatus;
@@ -44,7 +17,13 @@ export type WorkspaceAnalytics = Readonly<{
     percentage: number;
     color: string;
   }[];
-  memberCapacities: readonly MemberCapacityMetric[];
+  teamWorkload: readonly {
+    assigneeName: string;
+    total: number;
+    completed: number;
+    inProgress: number;
+    efficiency: number;
+  }[];
   projectVelocities: readonly {
     id: string;
     name: string;
@@ -65,19 +44,10 @@ type TaskAnalyticsRow = {
   status: TaskStatus;
   priority: TaskPriority;
   assignee_name: string;
-  due_date: string | null;
-};
-
-type UserRow = {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  avatar_url: string | null;
 };
 
 export function getWorkspaceAnalytics(orgId: string): WorkspaceAnalytics {
-  const taskStmt = db.prepare(`
+  const stmt = db.prepare(`
     SELECT
       t.id,
       t.project_id,
@@ -86,26 +56,19 @@ export function getWorkspaceAnalytics(orgId: string): WorkspaceAnalytics {
       p.status as project_status,
       t.status,
       t.priority,
-      t.assignee_name,
-      t.due_date
+      t.assignee_name
     FROM devflow_tasks t
     JOIN devflow_projects p ON p.id = t.project_id
     WHERE p.org_id = ?
   `);
 
-  const taskRows = taskStmt.all(orgId) as TaskAnalyticsRow[];
+  const taskRows = stmt.all(orgId) as TaskAnalyticsRow[];
 
   const projectCountStmt = db.prepare(
     "SELECT COUNT(*) as count FROM devflow_projects WHERE org_id = ?",
   );
   const totalProjects = (projectCountStmt.get(orgId) as { count: number })
     .count;
-
-  // Query all users
-  const userStmt = db.prepare(
-    "SELECT id, name, email, role, avatar_url FROM devflow_users",
-  );
-  const allUsers = userStmt.all() as UserRow[];
 
   const totalTasks = taskRows.length;
   const completedTasks = taskRows.filter((t) => t.status === "Done").length;
@@ -115,16 +78,6 @@ export function getWorkspaceAnalytics(orgId: string): WorkspaceAnalytics {
   const reviewTasks = taskRows.filter((t) => t.status === "Review").length;
   const todoTasks = taskRows.filter((t) => t.status === "Todo").length;
   const urgentTasks = taskRows.filter((t) => t.priority === "Urgent").length;
-
-  const now = new Date();
-  const todayStr = now.toISOString().split("T")[0];
-
-  let overdueTasksCount = 0;
-  for (const t of taskRows) {
-    if (t.status !== "Done" && t.due_date && t.due_date < todayStr) {
-      overdueTasksCount += 1;
-    }
-  }
 
   const completionRate =
     totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
@@ -161,94 +114,36 @@ export function getWorkspaceAnalytics(orgId: string): WorkspaceAnalytics {
     },
   ];
 
-  // Granular Engineer Capacity Calculation
-  const threeDaysFromNow = new Date();
-  threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
-  const threeDaysStr = threeDaysFromNow.toISOString().split("T")[0];
+  // Team Workload
+  const memberMap = new Map<
+    string,
+    { total: number; completed: number; inProgress: number }
+  >();
 
-  const memberCapacities: MemberCapacityMetric[] = allUsers.map((user) => {
-    const userTasks = taskRows.filter((t) => t.assignee_name === user.name);
-    const userTotal = userTasks.length;
-    const userCompleted = userTasks.filter((t) => t.status === "Done").length;
-    const userOpen = userTotal - userCompleted;
-
-    const urgent = userTasks.filter(
-      (t) => t.status !== "Done" && t.priority === "Urgent",
-    ).length;
-    const high = userTasks.filter(
-      (t) => t.status !== "Done" && t.priority === "High",
-    ).length;
-    const medium = userTasks.filter(
-      (t) => t.status !== "Done" && t.priority === "Medium",
-    ).length;
-    const low = userTasks.filter(
-      (t) => t.status !== "Done" && t.priority === "Low",
-    ).length;
-
-    let overdue = 0;
-    let dueSoon = 0;
-    const projectSet = new Set<string>();
-
-    for (const t of userTasks) {
-      projectSet.add(t.project_name);
-      if (t.status !== "Done" && t.due_date) {
-        if (t.due_date < todayStr) {
-          overdue += 1;
-        } else if (t.due_date <= threeDaysStr) {
-          dueSoon += 1;
-        }
-      }
-    }
-
-    // Determine Capacity Status
-    let capacityLevel: CapacityLevel = "Available";
-    if (userOpen >= 5 || urgent >= 2 || (userOpen >= 4 && overdue >= 1)) {
-      capacityLevel = "Overloaded";
-    } else if (userOpen >= 3) {
-      capacityLevel = "At Capacity";
-    } else if (userOpen >= 1) {
-      capacityLevel = "Optimal";
-    } else {
-      capacityLevel = "Available";
-    }
-
-    const efficiency =
-      userTotal === 0 ? 100 : Math.round((userCompleted / userTotal) * 100);
-
-    return {
-      userId: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      avatarUrl: user.avatar_url ?? undefined,
-      totalTasks: userTotal,
-      openTasks: userOpen,
-      completedTasks: userCompleted,
-      urgentTasks: urgent,
-      highTasks: high,
-      mediumTasks: medium,
-      lowTasks: low,
-      overdueTasks: overdue,
-      dueSoonTasks: dueSoon,
-      capacityLevel,
-      efficiency,
-      activeProjects: Array.from(projectSet),
+  for (const row of taskRows) {
+    const current = memberMap.get(row.assignee_name) || {
+      total: 0,
+      completed: 0,
+      inProgress: 0,
     };
-  });
-
-  // Sort capacities: Overloaded first, then by open tasks descending
-  memberCapacities.sort((a, b) => {
-    const rank: Record<CapacityLevel, number> = {
-      Overloaded: 4,
-      "At Capacity": 3,
-      Optimal: 2,
-      Available: 1,
-    };
-    if (rank[b.capacityLevel] !== rank[a.capacityLevel]) {
-      return rank[b.capacityLevel] - rank[a.capacityLevel];
+    current.total += 1;
+    if (row.status === "Done") current.completed += 1;
+    if (row.status === "In Progress" || row.status === "Review") {
+      current.inProgress += 1;
     }
-    return b.openTasks - a.openTasks;
-  });
+    memberMap.set(row.assignee_name, current);
+  }
+
+  const teamWorkload = Array.from(memberMap.entries()).map(
+    ([assigneeName, data]) => ({
+      assigneeName,
+      total: data.total,
+      completed: data.completed,
+      inProgress: data.inProgress,
+      efficiency:
+        data.total === 0 ? 0 : Math.round((data.completed / data.total) * 100),
+    }),
+  );
 
   // Project Velocities
   const projectMap = new Map<
@@ -262,6 +157,7 @@ export function getWorkspaceAnalytics(orgId: string): WorkspaceAnalytics {
     }
   >();
 
+  // Initialize with all projects in org
   const allProjectsStmt = db.prepare(
     "SELECT id, name, key, status FROM devflow_projects WHERE org_id = ?",
   );
@@ -311,10 +207,9 @@ export function getWorkspaceAnalytics(orgId: string): WorkspaceAnalytics {
     reviewTasks,
     todoTasks,
     urgentTasks,
-    overdueTasksCount,
     completionRate,
     stageBreakdown,
-    memberCapacities,
+    teamWorkload,
     projectVelocities,
   };
 }

@@ -3,7 +3,6 @@ import { getCurrentOrg, getCurrentUser } from "../lib/auth";
 import { getWorkspaceAnalytics } from "../lib/analytics";
 import { getProjectsByOrgId } from "../lib/queries";
 import { getMilestonesByOrgId } from "../lib/milestones";
-import { WorkloadHeatmap } from "./WorkloadHeatmap";
 import { SprintBurndownTracker } from "./SprintBurndownTracker";
 
 export default async function AnalyticsPage() {
@@ -28,8 +27,8 @@ export default async function AnalyticsPage() {
               Engineering Velocity & Capacity
             </h1>
             <p className="text-sm text-slate-400">
-              Live delivery metrics, sprint burndown velocity, and developer
-              capacity heatmap for{" "}
+              Live delivery metrics, sprint burndown velocity, and team
+              performance for{" "}
               <span className="font-medium text-cyan-300">
                 {currentOrg.name}
               </span>
@@ -84,34 +83,23 @@ export default async function AnalyticsPage() {
 
           <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-sm">
             <p className="text-xs font-medium text-slate-400">
-              Overdue Deliverables
+              Urgent Deliverables
             </p>
-            <p
-              className={`mt-2 text-3xl font-bold ${
-                analytics.overdueTasksCount > 0
-                  ? "text-rose-400"
-                  : "text-emerald-400"
-              }`}
-            >
-              {analytics.overdueTasksCount}
+            <p className="mt-2 text-3xl font-bold text-amber-400">
+              {analytics.urgentTasks}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              {analytics.overdueTasksCount > 0
-                ? "Immediate attention required"
-                : "All delivery dates healthy"}
+              Immediate attention required
             </p>
           </div>
         </div>
 
-        {/* Interactive Sprint Burndown & Milestone Tracker (Phase 62) */}
+        {/* Interactive Sprint Burndown & Milestone Tracker */}
         <SprintBurndownTracker
           milestones={milestones}
           projects={projects}
           currentUser={currentUser}
         />
-
-        {/* Developer Workload & Capacity Heatmap */}
-        <WorkloadHeatmap memberCapacities={analytics.memberCapacities} />
 
         {/* Project Health & Throughput Breakdown */}
         <section aria-labelledby="project-health-heading" className="space-y-4">

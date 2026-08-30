@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useCallback } from "react";
+import { useState, useTransition } from "react";
 import type { TaskPriority } from "../tasks/types";
 import type { AiTaskEnhancement } from "../lib/ai";
 import { enhanceTaskWithAiAction, applyAiSubtasksAction } from "../lib/actions";
@@ -37,7 +37,9 @@ export function AiTaskCopilotModal({
   const [selectedSubtasks, setSelectedSubtasks] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleGenerate = useCallback(() => {
+  if (!isOpen) return null;
+
+  const handleGenerate = () => {
     setErrorMessage(null);
     setAiData(null);
 
@@ -54,16 +56,7 @@ export function AiTaskCopilotModal({
         setSelectedSubtasks([...res.data.suggestedSubtasks]);
       }
     });
-  }, [taskTitle, taskDescription, taskTag]);
-
-  // Auto-trigger generation as soon as modal opens
-  useEffect(() => {
-    if (isOpen && !aiData && !isPending && taskTitle.trim()) {
-      handleGenerate();
-    }
-  }, [isOpen, aiData, isPending, taskTitle, handleGenerate]);
-
-  if (!isOpen) return null;
+  };
 
   const handleToggleSubtask = (title: string) => {
     setSelectedSubtasks((prev) =>
@@ -167,6 +160,31 @@ export function AiTaskCopilotModal({
                 safeguards.
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Initial Prompt State */}
+        {!aiData && !isPending && (
+          <div className="py-8 text-center space-y-4">
+            <div className="text-4xl animate-bounce">✨</div>
+            <div>
+              <p className="text-sm font-semibold text-slate-200">
+                Ready to break down this task?
+              </p>
+              <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                AI will inspect the title & domain requirements to draft
+                comprehensive acceptance criteria, security considerations, and
+                subtask checklists.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={!taskTitle.trim()}
+              onClick={handleGenerate}
+              className="rounded-xl bg-purple-500 px-5 py-2.5 text-xs font-bold text-white hover:bg-purple-400 disabled:opacity-40 transition shadow-lg shadow-purple-950/40"
+            >
+              ✨ Generate AI Breakdown
+            </button>
           </div>
         )}
 

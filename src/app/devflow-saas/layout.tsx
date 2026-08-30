@@ -19,6 +19,7 @@ import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { ThemeAccentPicker } from "./components/ThemeAccentPicker";
 import { ThemeModePicker } from "./components/ThemeModePicker";
 import { NotificationBell } from "./components/NotificationBell";
+import { NavSettingsDropdown } from "./components/NavSettingsDropdown";
 
 type DevFlowLayoutProps = Readonly<{
   children: ReactNode;
@@ -150,18 +151,18 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
 
       {/* SaaS App Header */}
       <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 sm:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3 sm:px-8">
           <div className="flex items-center gap-8">
             <Link
               href="/devflow-saas"
-              className="flex items-center gap-2 text-lg font-bold tracking-tight text-white transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-cyan-400"
+              className="flex shrink-0 items-center gap-2 text-base font-bold tracking-tight text-white transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-cyan-400"
             >
               <span
                 style={{
                   backgroundColor: palette.hex,
                   color: palette.textContrast,
                 }}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-black shadow-md transition-colors"
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black shadow-md transition-colors"
               >
                 DF
               </span>
@@ -170,84 +171,45 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
 
             <nav
               aria-label="Main Navigation"
-              className="hidden items-center gap-4 sm:flex"
+              className="hidden items-center gap-5 sm:flex"
             >
               <Link
                 href="/devflow-saas"
-                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+                className="text-xs font-medium text-slate-300 transition hover:text-white"
               >
                 Overview
               </Link>
               <Link
                 href="/devflow-saas/projects"
-                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+                className="text-xs font-medium text-slate-300 transition hover:text-white"
               >
                 Projects
               </Link>
               <Link
                 href="/devflow-saas/calendar"
-                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+                className="text-xs font-medium text-slate-300 transition hover:text-white"
               >
                 Calendar
               </Link>
               <Link
-                href="/devflow-saas/search"
-                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
-              >
-                Search
-              </Link>
-              <Link
-                href="/devflow-saas/tags"
-                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
-              >
-                Tags
-              </Link>
-              <Link
                 href="/devflow-saas/activity"
-                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+                className="text-xs font-medium text-slate-300 transition hover:text-white"
               >
                 Activity
               </Link>
               <Link
                 href="/devflow-saas/analytics"
-                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+                className="text-xs font-medium text-slate-300 transition hover:text-white"
               >
                 Analytics
               </Link>
-              <Link
-                href="/devflow-saas/settings/automations"
-                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
-              >
-                Automations
-              </Link>
-              <Link
-                href="/devflow-saas/integrations"
-                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
-              >
-                Webhooks
-              </Link>
-              <Link
-                href="/devflow-saas/settings/api-keys"
-                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
-              >
-                API Keys
-              </Link>
-              <Link
-                href="/devflow-saas/settings/export"
-                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
-              >
-                Backups
-              </Link>
-              <Link
-                href="/devflow-saas/team"
-                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
-              >
-                Team
-              </Link>
+
+              {/* Pro Settings & Tools Dropdown */}
+              <NavSettingsDropdown />
             </nav>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {/* Global Command Palette (⌘K) */}
             <CommandPalette
               projects={projects}

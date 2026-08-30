@@ -292,9 +292,9 @@ export function CommandPalette({
         onClick={openPalette}
         aria-label="Open Command Palette (⌘K)"
         title="Open Command Palette (⌘K)"
-        className="hidden items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-400 transition hover:border-slate-700 hover:text-slate-200 md:flex focus-visible:outline-2 focus-visible:outline-cyan-400"
+        className="hidden h-8 shrink-0 whitespace-nowrap items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-2.5 text-xs text-slate-400 transition hover:border-slate-700 hover:text-slate-200 xl:flex focus-visible:outline-2 focus-visible:outline-cyan-400"
       >
-        <span>🔍 Search or jump to...</span>
+        <span>🔍 Search...</span>
         <kbd className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 font-mono text-[10px] text-slate-300">
           ⌘K
         </kbd>

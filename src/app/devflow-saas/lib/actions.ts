@@ -6,6 +6,7 @@ import { db } from "./db";
 import { getCurrentUser, type ThemeAccent, type UserRole } from "./auth";
 import { logActivity } from "./activity";
 import { createNotification } from "./notifications";
+import { projectTemplates } from "./templates";
 import type { TagColor } from "./tags";
 import type { ProjectStatus } from "../projects/types";
 import type { TaskPriority, TaskStatus, TaskTag } from "../tasks/types";
@@ -320,6 +321,7 @@ export async function createProjectAction(
   const key = (formData.get("key") as string | null)?.trim().toUpperCase();
   const description = (formData.get("description") as string | null)?.trim();
   const status = (formData.get("status") as ProjectStatus | null) || "Active";
+  const templateId = (formData.get("templateId") as string | null)?.trim();
 
   if (!name || !key || !description) {
     return { success: false, error: "All fields are required." };
@@ -330,24 +332,61 @@ export async function createProjectAction(
   }
 
   try {
-    const id = `proj-${Date.now()}`;
+    const projectId = `proj-${Date.now()}`;
     const stmt = db.prepare(`
       INSERT INTO devflow_projects (id, org_id, name, key, description, status)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(id, orgId, name, key, description, status);
+    stmt.run(projectId, orgId, name, key, description, status);
+
+    // Auto-scaffold starter tasks if template is selected
+    const template = projectTemplates.find((t) => t.id === templateId);
+    if (template && template.starterTasks.length > 0) {
+      const taskStmt = db.prepare(`
+        INSERT INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (let i = 0; i < template.starterTasks.length; i++) {
+        const t = template.starterTasks[i];
+        const taskId = `task-${Date.now()}-${i + 1}`;
+        let dueDate: string | null = null;
+        if (t.dueDaysOffset !== undefined) {
+          const d = new Date();
+          d.setDate(d.getDate() + t.dueDaysOffset);
+          dueDate = d.toISOString().split("T")[0];
+        }
+
+        taskStmt.run(
+          taskId,
+          projectId,
+          t.title,
+          t.description,
+          t.status,
+          t.priority,
+          currentUser.name,
+          t.tag,
+          dueDate,
+        );
+      }
+    }
 
     logActivity(
       orgId,
-      id,
+      projectId,
       currentUser.name,
       "created_project",
       name,
-      `Project established with key ${key} (${status}).`,
+      `Project established with key ${key} (${status})${
+        template && template.id !== "custom-blank"
+          ? ` using ${template.name} template.`
+          : "."
+      }`,
     );
 
     revalidatePath("/devflow-saas/projects");
+    revalidatePath("/devflow-saas/calendar");
     revalidatePath("/devflow-saas/activity");
     revalidatePath("/devflow-saas/analytics");
     return { success: true };
@@ -423,6 +462,7 @@ export async function updateProjectAction(
 
     revalidatePath("/devflow-saas/projects");
     revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
     revalidatePath("/devflow-saas/activity");
     revalidatePath("/devflow-saas/analytics");
     return { success: true };
@@ -461,6 +501,7 @@ export async function deleteProjectAction(
     }
 
     revalidatePath("/devflow-saas/projects");
+    revalidatePath("/devflow-saas/calendar");
     revalidatePath("/devflow-saas/activity");
     revalidatePath("/devflow-saas/analytics");
     return { success: true };
@@ -543,6 +584,7 @@ export async function createTaskAction(
     }
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
     revalidatePath("/devflow-saas/activity");
     revalidatePath("/devflow-saas/analytics");
     return { success: true };
@@ -609,6 +651,7 @@ export async function updateTaskAction(
     }
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
     revalidatePath("/devflow-saas/activity");
     revalidatePath("/devflow-saas/analytics");
     return { success: true };
@@ -658,6 +701,7 @@ export async function updateTaskStatusAction(
     }
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
     revalidatePath("/devflow-saas/activity");
     revalidatePath("/devflow-saas/analytics");
     return { success: true };
@@ -697,6 +741,7 @@ export async function deleteTaskAction(
     }
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
     revalidatePath("/devflow-saas/activity");
     revalidatePath("/devflow-saas/analytics");
     return { success: true };
@@ -770,6 +815,7 @@ export async function createCommentAction(
     }
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
     revalidatePath("/devflow-saas/activity");
     revalidatePath("/devflow-saas/analytics");
     return { success: true };

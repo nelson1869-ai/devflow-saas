@@ -1,18 +1,16 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "../db";
-import { getCurrentUser } from "../auth";
+import { getDemoCurrentUser, getDemoCurrentOrg } from "../auth";
 import { logActivity } from "../activity";
-import { type ActionResponse, ORG_SESSION_COOKIE_NAME } from "./common";
+import type { ActionResponse } from "./common";
 
 export async function createSavedViewAction(
   formData: FormData,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  const cookieStore = await cookies();
-  const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
+  const currentUser = await getDemoCurrentUser();
+  const currentOrg = await getDemoCurrentOrg();
 
   const name = (formData.get("name") as string | null)?.trim();
   const icon = (formData.get("icon") as string | null)?.trim() || "🔍";
@@ -29,10 +27,18 @@ export async function createSavedViewAction(
       INSERT INTO devflow_saved_views (id, org_id, user_id, project_id, name, icon, filters_json)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(id, orgId, currentUser.id, projectId, name, icon, filtersJson);
+    stmt.run(
+      id,
+      currentOrg.id,
+      currentUser.id,
+      projectId,
+      name,
+      icon,
+      filtersJson,
+    );
 
     logActivity(
-      orgId,
+      currentOrg.id,
       projectId || undefined,
       currentUser.name,
       "created_project",
@@ -54,18 +60,17 @@ export async function deleteSavedViewAction(
   viewId: string,
   projectId?: string,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  const cookieStore = await cookies();
-  const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
+  const currentUser = await getDemoCurrentUser();
+  const currentOrg = await getDemoCurrentOrg();
 
   try {
     const stmt = db.prepare(
       "DELETE FROM devflow_saved_views WHERE id = ? AND org_id = ?",
     );
-    stmt.run(viewId, orgId);
+    stmt.run(viewId, currentOrg.id);
 
     logActivity(
-      orgId,
+      currentOrg.id,
       projectId,
       currentUser.name,
       "deleted_task",

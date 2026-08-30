@@ -1,26 +1,21 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "../db";
-import { getCurrentUser } from "../auth";
 import { logActivity } from "../activity";
-import { type ActionResponse, ORG_SESSION_COOKIE_NAME } from "./common";
+import { requireDemoAdmin, requireDemoProjectAccess } from "../tenant-guard";
+import type { ActionResponse } from "./common";
 
 export async function createAutomationRuleAction(
   formData: FormData,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  const cookieStore = await cookies();
-  const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
-
-  if (currentUser.role !== "Admin") {
-    return {
-      success: false,
-      error: "Only workspace Admins can create automation rules.",
-    };
+  // 1. Enforce Admin Authorization
+  const adminGuard = await requireDemoAdmin();
+  if (!adminGuard.authorized) {
+    return { success: false, error: adminGuard.error };
   }
 
+  const { currentUser, currentOrg } = adminGuard;
   const name = (formData.get("name") as string | null)?.trim();
   const description = (formData.get("description") as string | null)?.trim();
   const triggerEvent = (formData.get("triggerEvent") as string | null)?.trim();
@@ -37,6 +32,14 @@ export async function createAutomationRuleAction(
     };
   }
 
+  // 2. If rule is project-scoped, verify project belongs to tenant
+  if (projectId) {
+    const projectGuard = await requireDemoProjectAccess(projectId);
+    if (!projectGuard.authorized) {
+      return { success: false, error: projectGuard.error };
+    }
+  }
+
   try {
     const id = `auto-${Date.now()}`;
     const stmt = db.prepare(`
@@ -45,7 +48,7 @@ export async function createAutomationRuleAction(
     `);
     stmt.run(
       id,
-      orgId,
+      currentOrg.id,
       projectId,
       name,
       description || null,
@@ -55,7 +58,7 @@ export async function createAutomationRuleAction(
     );
 
     logActivity(
-      orgId,
+      currentOrg.id,
       projectId || undefined,
       currentUser.name,
       "created_project",
@@ -77,22 +80,18 @@ export async function toggleAutomationRuleStatusAction(
   ruleId: string,
   isActive: boolean,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  const cookieStore = await cookies();
-  const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
-
-  if (currentUser.role !== "Admin") {
-    return {
-      success: false,
-      error: "Only workspace Admins can modify automation rules.",
-    };
+  const adminGuard = await requireDemoAdmin();
+  if (!adminGuard.authorized) {
+    return { success: false, error: adminGuard.error };
   }
+
+  const { currentOrg } = adminGuard;
 
   try {
     const stmt = db.prepare(
       "UPDATE devflow_automations SET is_active = ? WHERE id = ? AND org_id = ?",
     );
-    stmt.run(isActive ? 1 : 0, ruleId, orgId);
+    stmt.run(isActive ? 1 : 0, ruleId, currentOrg.id);
 
     revalidatePath("/devflow-saas/settings/automations");
     return { success: true };
@@ -107,25 +106,21 @@ export async function toggleAutomationRuleStatusAction(
 export async function deleteAutomationRuleAction(
   ruleId: string,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  const cookieStore = await cookies();
-  const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
-
-  if (currentUser.role !== "Admin") {
-    return {
-      success: false,
-      error: "Only workspace Admins can delete automation rules.",
-    };
+  const adminGuard = await requireDemoAdmin();
+  if (!adminGuard.authorized) {
+    return { success: false, error: adminGuard.error };
   }
+
+  const { currentUser, currentOrg } = adminGuard;
 
   try {
     const stmt = db.prepare(
       "DELETE FROM devflow_automations WHERE id = ? AND org_id = ?",
     );
-    stmt.run(ruleId, orgId);
+    stmt.run(ruleId, currentOrg.id);
 
     logActivity(
-      orgId,
+      currentOrg.id,
       undefined,
       currentUser.name,
       "deleted_task",

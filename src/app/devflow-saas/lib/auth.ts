@@ -1,3 +1,21 @@
+/**
+ * ============================================================================
+ * DEMO IDENTITY & WORKSPACE CONTEXT (LEARNING ONLY)
+ * ============================================================================
+ * DEMO AUTH STATUS: NOT PRODUCTION AUTHENTICATION
+ *
+ * This file implements a client-switchable DEMO USER and DEMO WORKSPACE selector
+ * for local learning and UI demonstration. It reads plaintext cookie identifiers
+ * to simulate switching between team members (Admin vs. Member) and tenants.
+ *
+ * PRODUCTION DIFFERENCE:
+ * Real production authentication must NEVER trust a plaintext user ID cookie.
+ * Real auth requires cryptographically signed/encrypted session tokens, server-side
+ * session lookup with expiration/revocation, CSRF protection, and secure OAuth/OIDC/password
+ * verification.
+ * ============================================================================
+ */
+
 import { cookies } from "next/headers";
 import { db } from "./db";
 
@@ -19,13 +37,17 @@ export type Organization = Readonly<{
 }>;
 
 export type ThemeAccent = "cyan" | "emerald" | "violet" | "amber" | "rose";
-
 export type ThemeMode = "dark" | "light" | "high-contrast" | "system";
 
-export const USER_SESSION_COOKIE_NAME = "devflow_session_user_id";
-export const ORG_SESSION_COOKIE_NAME = "devflow_session_org_id";
+// Explicit Demo Cookie Names
+export const DEMO_USER_COOKIE_NAME = "devflow_demo_user_id";
+export const DEMO_ORG_COOKIE_NAME = "devflow_demo_org_id";
 export const THEME_ACCENT_COOKIE_NAME = "devflow_theme_accent";
 export const THEME_MODE_COOKIE_NAME = "devflow_theme_mode";
+
+// Backward-compatible aliases for existing components
+export const USER_SESSION_COOKIE_NAME = DEMO_USER_COOKIE_NAME;
+export const ORG_SESSION_COOKIE_NAME = DEMO_ORG_COOKIE_NAME;
 
 type UserRow = {
   id: string;
@@ -42,15 +64,37 @@ type OrgRow = {
   plan: string;
 };
 
-export async function getCurrentUser(): Promise<User> {
-  const cookieStore = await cookies();
-  const sessionUserId = cookieStore.get(USER_SESSION_COOKIE_NAME)?.value;
+// Safe default non-admin demo user for fallback
+const SAFE_DEFAULT_DEMO_USER: User = {
+  id: "usr-2",
+  name: "Devin Zhao",
+  email: "devin@acme.dev",
+  role: "Member",
+};
 
-  if (sessionUserId) {
+// Safe default demo organization
+const SAFE_DEFAULT_DEMO_ORG: Organization = {
+  id: "org-1",
+  name: "Acme Engineering",
+  slug: "acme-engineering",
+  plan: "Enterprise",
+};
+
+/**
+ * Retrieve the active Demo User identity from the demo cookie.
+ * If missing or invalid, falls back safely to a non-privileged Member persona (never Admin).
+ */
+export async function getDemoCurrentUser(): Promise<User> {
+  const cookieStore = await cookies();
+  const demoUserId =
+    cookieStore.get(DEMO_USER_COOKIE_NAME)?.value ||
+    cookieStore.get("devflow_session_user_id")?.value;
+
+  if (demoUserId) {
     const stmt = db.prepare(
       "SELECT id, name, email, role, avatar_url FROM devflow_users WHERE id = ?",
     );
-    const user = stmt.get(sessionUserId) as UserRow | undefined;
+    const user = stmt.get(demoUserId) as UserRow | undefined;
     if (user) {
       return {
         id: user.id,
@@ -62,54 +106,40 @@ export async function getCurrentUser(): Promise<User> {
     }
   }
 
-  // Fallback to first user in database
-  const defaultUser = db
+  // Safe fallback: Query specifically for a Member-level persona, or use safe default
+  const memberUser = db
     .prepare(
-      "SELECT id, name, email, role, avatar_url FROM devflow_users ORDER BY id ASC LIMIT 1",
+      "SELECT id, name, email, role, avatar_url FROM devflow_users WHERE role = 'Member' ORDER BY id ASC LIMIT 1",
     )
     .get() as UserRow | undefined;
 
-  if (defaultUser) {
+  if (memberUser) {
     return {
-      id: defaultUser.id,
-      name: defaultUser.name,
-      email: defaultUser.email,
-      role: defaultUser.role,
-      avatarUrl: defaultUser.avatar_url ?? undefined,
+      id: memberUser.id,
+      name: memberUser.name,
+      email: memberUser.email,
+      role: memberUser.role,
+      avatarUrl: memberUser.avatar_url ?? undefined,
     };
   }
 
-  return {
-    id: "usr-1",
-    name: "Alex Rivera",
-    email: "alex@acme.dev",
-    role: "Admin",
-  };
+  return SAFE_DEFAULT_DEMO_USER;
 }
 
-export async function getAllUsers(): Promise<readonly User[]> {
-  const stmt = db.prepare(
-    "SELECT id, name, email, role, avatar_url FROM devflow_users ORDER BY name ASC",
-  );
-  const rows = stmt.all() as UserRow[];
-  return rows.map((u) => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    role: u.role,
-    avatarUrl: u.avatar_url ?? undefined,
-  }));
-}
-
-export async function getCurrentOrg(): Promise<Organization> {
+/**
+ * Retrieve the active Demo Organization from the demo cookie.
+ */
+export async function getDemoCurrentOrg(): Promise<Organization> {
   const cookieStore = await cookies();
-  const sessionOrgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value;
+  const demoOrgId =
+    cookieStore.get(DEMO_ORG_COOKIE_NAME)?.value ||
+    cookieStore.get("devflow_session_org_id")?.value;
 
-  if (sessionOrgId) {
+  if (demoOrgId) {
     const stmt = db.prepare(
       "SELECT id, name, slug, plan FROM devflow_organizations WHERE id = ?",
     );
-    const org = stmt.get(sessionOrgId) as OrgRow | undefined;
+    const org = stmt.get(demoOrgId) as OrgRow | undefined;
     if (org) {
       return {
         id: org.id,
@@ -135,15 +165,30 @@ export async function getCurrentOrg(): Promise<Organization> {
     };
   }
 
-  return {
-    id: "org-1",
-    name: "Acme Corp",
-    slug: "acme-corp",
-    plan: "Enterprise",
-  };
+  return SAFE_DEFAULT_DEMO_ORG;
 }
 
-export async function getAllOrgs(): Promise<readonly Organization[]> {
+/**
+ * List all available seeded demo users for the persona switcher.
+ */
+export async function getAllDemoUsers(): Promise<readonly User[]> {
+  const stmt = db.prepare(
+    "SELECT id, name, email, role, avatar_url FROM devflow_users ORDER BY name ASC",
+  );
+  const rows = stmt.all() as UserRow[];
+  return rows.map((u) => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    avatarUrl: u.avatar_url ?? undefined,
+  }));
+}
+
+/**
+ * List all available demo organizations for the workspace switcher.
+ */
+export async function getAllDemoOrgs(): Promise<readonly Organization[]> {
   const stmt = db.prepare(
     "SELECT id, name, slug, plan FROM devflow_organizations ORDER BY name ASC",
   );
@@ -184,3 +229,9 @@ export async function getThemeMode(): Promise<ThemeMode> {
   }
   return "dark";
 }
+
+// Aliases for seamless backward compatibility across views
+export const getCurrentUser = getDemoCurrentUser;
+export const getCurrentOrg = getDemoCurrentOrg;
+export const getAllUsers = getAllDemoUsers;
+export const getAllOrgs = getAllDemoOrgs;

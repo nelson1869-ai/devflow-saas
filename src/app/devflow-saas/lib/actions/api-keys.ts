@@ -1,29 +1,28 @@
 "use server";
 
 import crypto from "node:crypto";
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "../db";
-import { getCurrentUser } from "../auth";
 import { logActivity } from "../activity";
+import { validateApiScopes } from "../api-keys";
+import { requireDemoAdmin, requireDemoApiKeyAccess } from "../tenant-guard";
 import type { ActionResponse } from "./common";
 
-const ORG_SESSION_COOKIE_NAME = "devflow_session_org_id";
-
-export async function createApiKeyAction(
-  formData: FormData,
-): Promise<{
+export async function createApiKeyAction(formData: FormData): Promise<{
   success: boolean;
   rawKey?: string;
   keyId?: string;
   error?: string;
 }> {
-  const currentUser = await getCurrentUser();
-  const cookieStore = await cookies();
-  const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
+  // 1. Enforce Admin Authorization Check
+  const adminGuard = await requireDemoAdmin();
+  if (!adminGuard.authorized) {
+    return { success: false, error: adminGuard.error };
+  }
 
+  const { currentUser, currentOrg } = adminGuard;
   const name = (formData.get("name") as string | null)?.trim();
-  const rawScopes =
+  const rawScopesString =
     (formData.get("scopes") as string | null)?.trim() ||
     "read:tasks,write:tasks,read:projects";
   const expiresDays = parseInt(
@@ -35,7 +34,16 @@ export async function createApiKeyAction(
     return { success: false, error: "Key name is required." };
   }
 
-  // Generate cryptographically secure API key
+  // 2. Enforce Strict Scope Allowlist Validation
+  const requestedScopes = rawScopesString.split(",");
+  const scopeValidation = validateApiScopes(requestedScopes);
+  if (!scopeValidation.valid) {
+    return { success: false, error: scopeValidation.error };
+  }
+
+  const validatedScopesString = scopeValidation.validatedScopes.join(",");
+
+  // 3. Generate Cryptographically Secure API Key (df_live_...)
   const randomHex = crypto.randomBytes(20).toString("hex");
   const rawKey = `df_live_${randomHex}`;
   const keyPrefix = `df_live_${randomHex.slice(0, 4)}...${randomHex.slice(-4)}`;
@@ -57,22 +65,22 @@ export async function createApiKeyAction(
 
     stmt.run(
       id,
-      orgId,
+      currentOrg.id,
       currentUser.id,
       name,
       keyPrefix,
       keyHash,
-      rawScopes,
+      validatedScopesString,
       expiresAt,
     );
 
     logActivity(
-      orgId,
+      currentOrg.id,
       undefined,
       currentUser.name,
       "created_api_key",
       name,
-      `Generated new API Key "${name}" (${keyPrefix}) with scopes: [${rawScopes}].`,
+      `Generated new API Key "${name}" (${keyPrefix}) with scopes: [${validatedScopesString}].`,
     );
 
     revalidatePath("/devflow-saas/settings/api-keys");
@@ -85,32 +93,35 @@ export async function createApiKeyAction(
 export async function toggleApiKeyStatusAction(
   keyId: string,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  const cookieStore = await cookies();
-  const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
+  // 1. Enforce Admin Authorization & Tenant Scoping
+  const adminGuard = await requireDemoAdmin();
+  if (!adminGuard.authorized) {
+    return { success: false, error: adminGuard.error };
+  }
+
+  const keyGuard = await requireDemoApiKeyAccess(keyId);
+  if (!keyGuard.authorized) {
+    return { success: false, error: keyGuard.error };
+  }
+
+  const { currentUser, currentOrg } = adminGuard;
+  const { isActive, name } = keyGuard.data;
+  const newStatus = isActive ? 0 : 1;
 
   try {
-    const keyStmt = db.prepare(
-      "SELECT name, is_active FROM devflow_api_keys WHERE id = ?",
+    // 2. Strict Tenant-Scoped Update
+    const stmt = db.prepare(
+      "UPDATE devflow_api_keys SET is_active = ? WHERE id = ? AND org_id = ?",
     );
-    const key = keyStmt.get(keyId) as
-      | { name: string; is_active: number }
-      | undefined;
-    if (!key) return { success: false, error: "API key not found." };
-
-    const newStatus = key.is_active ? 0 : 1;
-    db.prepare("UPDATE devflow_api_keys SET is_active = ? WHERE id = ?").run(
-      newStatus,
-      keyId,
-    );
+    stmt.run(newStatus, keyId, currentOrg.id);
 
     logActivity(
-      orgId,
+      currentOrg.id,
       undefined,
       currentUser.name,
       newStatus ? "activated_api_key" : "revoked_api_key",
-      key.name,
-      `${newStatus ? "Activated" : "Revoked"} API Key "${key.name}".`,
+      name,
+      `${newStatus ? "Activated" : "Revoked"} API Key "${name}".`,
     );
 
     revalidatePath("/devflow-saas/settings/api-keys");
@@ -123,28 +134,35 @@ export async function toggleApiKeyStatusAction(
 export async function deleteApiKeyAction(
   keyId: string,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  const cookieStore = await cookies();
-  const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
+  // 1. Enforce Admin Authorization & Tenant Scoping
+  const adminGuard = await requireDemoAdmin();
+  if (!adminGuard.authorized) {
+    return { success: false, error: adminGuard.error };
+  }
+
+  const keyGuard = await requireDemoApiKeyAccess(keyId);
+  if (!keyGuard.authorized) {
+    return { success: false, error: keyGuard.error };
+  }
+
+  const { currentUser, currentOrg } = adminGuard;
+  const { name } = keyGuard.data;
 
   try {
-    const keyStmt = db.prepare(
-      "SELECT name FROM devflow_api_keys WHERE id = ?",
+    // 2. Strict Tenant-Scoped Deletion
+    const stmt = db.prepare(
+      "DELETE FROM devflow_api_keys WHERE id = ? AND org_id = ?",
     );
-    const key = keyStmt.get(keyId) as { name: string } | undefined;
+    stmt.run(keyId, currentOrg.id);
 
-    db.prepare("DELETE FROM devflow_api_keys WHERE id = ?").run(keyId);
-
-    if (key) {
-      logActivity(
-        orgId,
-        undefined,
-        currentUser.name,
-        "deleted_api_key",
-        key.name,
-        `Permanently deleted API Key "${key.name}".`,
-      );
-    }
+    logActivity(
+      currentOrg.id,
+      undefined,
+      currentUser.name,
+      "deleted_task",
+      name,
+      `Deleted API Key "${name}".`,
+    );
 
     revalidatePath("/devflow-saas/settings/api-keys");
     return { success: true };

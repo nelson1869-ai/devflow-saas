@@ -4,16 +4,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { revalidatePath } from "next/cache";
 import { db } from "../db";
-import { getCurrentUser } from "../auth";
 import { logActivity } from "../activity";
+import { requireDemoTaskAccess } from "../tenant-guard";
+import { getDemoCurrentOrg } from "../auth";
 import type { ActionResponse } from "./common";
 
 export async function uploadTaskAttachmentAction(
   formData: FormData,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  const taskId = (formData.get("taskId") as string | null)?.trim();
-  const projectId = (formData.get("projectId") as string | null)?.trim();
+  const taskId = (formData.get("taskId") as string | null)?.trim() || "";
+  const projectId = (formData.get("projectId") as string | null)?.trim() || "";
   const rawFileName = (formData.get("fileName") as string | null)?.trim();
   const fileType =
     (formData.get("fileType") as string | null)?.trim() ||
@@ -32,6 +32,14 @@ export async function uploadTaskAttachmentAction(
     };
   }
 
+  // 1. Enforce Tenant Scoping Guard on Task
+  const taskGuard = await requireDemoTaskAccess(taskId);
+  if (!taskGuard.authorized) {
+    return { success: false, error: taskGuard.error };
+  }
+
+  const { currentUser, currentOrg } = taskGuard;
+
   // Sanitize file name
   const cleanBaseName =
     rawFileName
@@ -48,7 +56,7 @@ export async function uploadTaskAttachmentAction(
 
     const diskPath = path.join(uploadDir, uniqueDiskName);
 
-    // 1. Write file to public/uploads/
+    // Write file to public/uploads/
     if (fileObj && typeof fileObj.arrayBuffer === "function") {
       const buffer = Buffer.from(await fileObj.arrayBuffer());
       fs.writeFileSync(diskPath, buffer);
@@ -59,7 +67,7 @@ export async function uploadTaskAttachmentAction(
 
     const publicUrl = `/uploads/${uniqueDiskName}`;
 
-    // 2. Save metadata in SQLite
+    // Save metadata in SQLite
     const id = `att-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const stmt = db.prepare(`
       INSERT INTO devflow_attachments (id, task_id, user_id, user_name, file_name, file_type, file_size_bytes, file_url)
@@ -77,27 +85,15 @@ export async function uploadTaskAttachmentAction(
       publicUrl,
     );
 
-    const taskStmt = db.prepare("SELECT title FROM devflow_tasks WHERE id = ?");
-    const task = taskStmt.get(taskId) as { title: string } | undefined;
-
-    const projectStmt = db.prepare(
-      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    logActivity(
+      currentOrg.id,
+      projectId,
+      currentUser.name,
+      "updated_task",
+      taskGuard.data.taskTitle,
+      `Attached file to workspace: "${cleanBaseName}".`,
+      taskId,
     );
-    const project = projectStmt.get(projectId) as
-      | { org_id: string }
-      | undefined;
-
-    if (project && task) {
-      logActivity(
-        project.org_id,
-        projectId,
-        currentUser.name,
-        "updated_task",
-        task.title,
-        `Attached file to workspace: "${cleanBaseName}".`,
-        taskId,
-      );
-    }
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
     return { success: true };
@@ -114,24 +110,34 @@ export async function deleteTaskAttachmentAction(
   attachmentId: string,
   projectId: string,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
+  const currentOrg = await getDemoCurrentOrg();
+
   try {
     const attachStmt = db.prepare(`
-      SELECT a.file_name, a.file_url, a.task_id, t.title as task_title
+      SELECT a.file_name, a.file_url, a.task_id, t.title as task_title, p.org_id
       FROM devflow_attachments a
       JOIN devflow_tasks t ON t.id = a.task_id
-      WHERE a.id = ?
+      JOIN devflow_projects p ON p.id = t.project_id
+      WHERE a.id = ? AND p.org_id = ?
     `);
-    const att = attachStmt.get(attachmentId) as
+    const att = attachStmt.get(attachmentId, currentOrg.id) as
       | {
           file_name: string;
           file_url: string;
           task_id: string;
           task_title: string;
+          org_id: string;
         }
       | undefined;
 
-    if (att && att.file_url.startsWith("/uploads/")) {
+    if (!att) {
+      return {
+        success: false,
+        error: "Attachment not found in active workspace.",
+      };
+    }
+
+    if (att.file_url.startsWith("/uploads/")) {
       const diskPath = path.resolve(
         process.cwd(),
         "public",
@@ -147,24 +153,17 @@ export async function deleteTaskAttachmentAction(
     const stmt = db.prepare("DELETE FROM devflow_attachments WHERE id = ?");
     stmt.run(attachmentId);
 
-    const projectStmt = db.prepare(
-      "SELECT org_id FROM devflow_projects WHERE id = ?",
-    );
-    const project = projectStmt.get(projectId) as
-      | { org_id: string }
-      | undefined;
+    const currentUser = await (await import("../auth")).getDemoCurrentUser();
 
-    if (project && att) {
-      logActivity(
-        project.org_id,
-        projectId,
-        currentUser.name,
-        "updated_task",
-        att.task_title,
-        `Removed attachment: "${att.file_name}".`,
-        att.task_id,
-      );
-    }
+    logActivity(
+      currentOrg.id,
+      projectId,
+      currentUser.name,
+      "updated_task",
+      att.task_title,
+      `Removed attachment: "${att.file_name}".`,
+      att.task_id,
+    );
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
     return { success: true };

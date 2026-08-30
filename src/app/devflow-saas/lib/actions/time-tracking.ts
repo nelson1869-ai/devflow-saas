@@ -2,17 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "../db";
-import { getCurrentUser } from "../auth";
 import { logActivity } from "../activity";
 import { runAutomationsForTrigger } from "../automations";
+import { requireDemoTaskAccess } from "../tenant-guard";
+import { getDemoCurrentOrg } from "../auth";
 import type { ActionResponse } from "./common";
 
 export async function logTaskTimeAction(
   formData: FormData,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
-  const taskId = (formData.get("taskId") as string | null)?.trim();
-  const projectId = (formData.get("projectId") as string | null)?.trim();
+  const taskId = (formData.get("taskId") as string | null)?.trim() || "";
+  const projectId = (formData.get("projectId") as string | null)?.trim() || "";
   const hoursRaw = (formData.get("hours") as string | null)?.trim();
   const description = (formData.get("description") as string | null)?.trim();
 
@@ -24,6 +24,14 @@ export async function logTaskTimeAction(
       error: "Valid work hours (greater than 0) are required.",
     };
   }
+
+  // 1. Enforce Tenant Scoping Guard on Task
+  const taskGuard = await requireDemoTaskAccess(taskId);
+  if (!taskGuard.authorized) {
+    return { success: false, error: taskGuard.error };
+  }
+
+  const { currentUser, currentOrg } = taskGuard;
 
   try {
     const id = `time-${Date.now()}`;
@@ -47,16 +55,9 @@ export async function logTaskTimeAction(
       | { title: string; estimated_hours: number }
       | undefined;
 
-    const projectStmt = db.prepare(
-      "SELECT org_id FROM devflow_projects WHERE id = ?",
-    );
-    const project = projectStmt.get(projectId) as
-      | { org_id: string }
-      | undefined;
-
-    if (project && task) {
+    if (task) {
       logActivity(
-        project.org_id,
+        currentOrg.id,
         projectId,
         currentUser.name,
         "updated_task",
@@ -75,7 +76,7 @@ export async function logTaskTimeAction(
         task.estimated_hours > 0 &&
         (totalLoggedRes?.total || 0) > task.estimated_hours
       ) {
-        await runAutomationsForTrigger(project.org_id, "time_over_budget", {
+        await runAutomationsForTrigger(currentOrg.id, "time_over_budget", {
           taskId,
           projectId,
           taskTitle: task.title,
@@ -96,39 +97,41 @@ export async function deleteTimeLogAction(
   timeLogId: string,
   projectId: string,
 ): Promise<ActionResponse> {
-  const currentUser = await getCurrentUser();
+  const currentOrg = await getDemoCurrentOrg();
+
   try {
     const logStmt = db.prepare(`
-      SELECT l.hours, t.title, t.id as task_id
+      SELECT l.hours, t.title, t.id as task_id, p.org_id
       FROM devflow_time_logs l
       JOIN devflow_tasks t ON t.id = l.task_id
-      WHERE l.id = ?
+      JOIN devflow_projects p ON p.id = t.project_id
+      WHERE l.id = ? AND p.org_id = ?
     `);
-    const log = logStmt.get(timeLogId) as
-      | { hours: number; title: string; task_id: string }
+    const log = logStmt.get(timeLogId, currentOrg.id) as
+      | { hours: number; title: string; task_id: string; org_id: string }
       | undefined;
+
+    if (!log) {
+      return {
+        success: false,
+        error: "Time log entry not found in active workspace.",
+      };
+    }
 
     const stmt = db.prepare("DELETE FROM devflow_time_logs WHERE id = ?");
     stmt.run(timeLogId);
 
-    const projectStmt = db.prepare(
-      "SELECT org_id FROM devflow_projects WHERE id = ?",
-    );
-    const project = projectStmt.get(projectId) as
-      | { org_id: string }
-      | undefined;
+    const currentUser = await (await import("../auth")).getDemoCurrentUser();
 
-    if (project && log) {
-      logActivity(
-        project.org_id,
-        projectId,
-        currentUser.name,
-        "updated_task",
-        log.title,
-        `Removed ${log.hours}h time log entry.`,
-        log.task_id,
-      );
-    }
+    logActivity(
+      currentOrg.id,
+      projectId,
+      currentUser.name,
+      "updated_task",
+      log.title,
+      `Removed ${log.hours}h time log entry.`,
+      log.task_id,
+    );
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
     revalidatePath("/devflow-saas/analytics");

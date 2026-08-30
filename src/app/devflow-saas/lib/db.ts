@@ -268,6 +268,16 @@ try {
       FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE
     );
+
+    -- Tenant Performance Indexes
+    CREATE INDEX IF NOT EXISTS idx_devflow_projects_org ON devflow_projects(org_id);
+    CREATE INDEX IF NOT EXISTS idx_devflow_tasks_project ON devflow_tasks(project_id);
+    CREATE INDEX IF NOT EXISTS idx_devflow_api_keys_org ON devflow_api_keys(org_id);
+    CREATE INDEX IF NOT EXISTS idx_devflow_milestones_org ON devflow_milestones(org_id);
+    CREATE INDEX IF NOT EXISTS idx_devflow_tags_org ON devflow_tags(org_id);
+    CREATE INDEX IF NOT EXISTS idx_devflow_webhooks_org ON devflow_webhooks(org_id);
+    CREATE INDEX IF NOT EXISTS idx_devflow_automations_org ON devflow_automations(org_id);
+    CREATE INDEX IF NOT EXISTS idx_devflow_activities_org ON devflow_activities(org_id);
   `);
 
   // Runtime self-healing column migrations

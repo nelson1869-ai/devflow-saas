@@ -26,10 +26,10 @@ export async function GET(req: NextRequest) {
     const projects = db
       .prepare(
         `
-        SELECT id, org_id, name, key, description, status, is_archived, created_at
+        SELECT id, org_id, name, key, description, status, is_archived
         FROM devflow_projects
         WHERE org_id = ?
-        ORDER BY created_at DESC
+        ORDER BY id ASC
       `,
       )
       .all(auth.orgId);

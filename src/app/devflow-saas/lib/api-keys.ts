@@ -2,6 +2,18 @@ import "server-only";
 import crypto from "node:crypto";
 import { db } from "./db";
 
+/**
+ * Centrally defined allowed API scopes (Strict Allowlist).
+ * Arbitrary scope injections will be rejected.
+ */
+export const SUPPORTED_API_SCOPES = [
+  "read:tasks",
+  "write:tasks",
+  "read:projects",
+] as const;
+
+export type ApiScope = (typeof SUPPORTED_API_SCOPES)[number];
+
 export type ApiKey = Readonly<{
   id: string;
   orgId: string;
@@ -9,7 +21,7 @@ export type ApiKey = Readonly<{
   userName?: string;
   name: string;
   keyPrefix: string;
-  scopes: readonly string[];
+  scopes: readonly ApiScope[];
   lastUsedAt?: string;
   expiresAt?: string;
   isActive: boolean;
@@ -31,7 +43,45 @@ type ApiKeyRow = {
   created_at: string;
 };
 
+/**
+ * Validate an array of requested scope strings against the strict allowlist.
+ */
+export function validateApiScopes(requestedScopes: readonly string[]): {
+  valid: boolean;
+  validatedScopes: ApiScope[];
+  error?: string;
+} {
+  const validatedScopes: ApiScope[] = [];
+
+  for (const s of requestedScopes) {
+    const trimmed = s.trim();
+    if (!trimmed) continue;
+    if (!SUPPORTED_API_SCOPES.includes(trimmed as ApiScope)) {
+      return {
+        valid: false,
+        validatedScopes: [],
+        error: `Unsupported API scope: "${trimmed}". Allowed scopes: ${SUPPORTED_API_SCOPES.join(", ")}`,
+      };
+    }
+    if (!validatedScopes.includes(trimmed as ApiScope)) {
+      validatedScopes.push(trimmed as ApiScope);
+    }
+  }
+
+  if (validatedScopes.length === 0) {
+    return {
+      valid: false,
+      validatedScopes: [],
+      error: "At least one valid API scope is required.",
+    };
+  }
+
+  return { valid: true, validatedScopes };
+}
+
 export function getApiKeysByOrgId(orgId: string): readonly ApiKey[] {
+  if (!orgId) return [];
+
   const stmt = db.prepare(`
     SELECT
       k.id,
@@ -63,7 +113,9 @@ export function getApiKeysByOrgId(orgId: string): readonly ApiKey[] {
     scopes: r.scopes
       .split(",")
       .map((s) => s.trim())
-      .filter(Boolean),
+      .filter((s): s is ApiScope =>
+        SUPPORTED_API_SCOPES.includes(s as ApiScope),
+      ),
     lastUsedAt: r.last_used_at ?? undefined,
     expiresAt: r.expires_at ?? undefined,
     isActive: Boolean(r.is_active),
@@ -73,7 +125,7 @@ export function getApiKeysByOrgId(orgId: string): readonly ApiKey[] {
 
 export function validateApiKeyAndScope(
   rawKey: string,
-  requiredScope?: string,
+  requiredScope?: ApiScope,
 ): { valid: boolean; orgId?: string; userId?: string; error?: string } {
   if (!rawKey || !rawKey.startsWith("df_live_")) {
     return {
@@ -118,10 +170,7 @@ export function validateApiKeyAndScope(
 
   if (requiredScope) {
     const grantedScopes = row.scopes.split(",").map((s) => s.trim());
-    if (
-      !grantedScopes.includes(requiredScope) &&
-      !grantedScopes.includes("admin")
-    ) {
+    if (!grantedScopes.includes(requiredScope)) {
       return {
         valid: false,
         error: `Missing required scope permission: "${requiredScope}".`,
@@ -129,7 +178,7 @@ export function validateApiKeyAndScope(
     }
   }
 
-  // Update last_used_at timestamp
+  // Update last_used_at timestamp safely
   db.prepare(
     "UPDATE devflow_api_keys SET last_used_at = datetime('now') WHERE id = ?",
   ).run(row.id);

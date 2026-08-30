@@ -10,6 +10,7 @@ import { getProjectsByOrgId } from "./lib/queries";
 import { UserMenu } from "./components/UserMenu";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
 import { CommandPalette } from "./components/CommandPalette";
+import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 
 type DevFlowLayoutProps = Readonly<{
   children: ReactNode;
@@ -73,13 +74,16 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
             </nav>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {/* Global Command Palette (⌘K) */}
             <CommandPalette
               projects={projects}
               allOrgs={allOrgs}
               allUsers={allUsers}
             />
+
+            {/* Keyboard Shortcuts Helper (?) */}
+            <KeyboardShortcutsModal />
 
             {/* Multi-Tenant Workspace Switcher */}
             <WorkspaceMenu currentOrg={currentOrg} allOrgs={allOrgs} />

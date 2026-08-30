@@ -273,6 +273,51 @@ export default async function AnalyticsPage() {
             </div>
           </section>
         </div>
+
+        {/* Data Export & Portability */}
+        <section
+          aria-labelledby="export-heading"
+          className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 sm:p-8"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2
+                id="export-heading"
+                className="text-base font-semibold text-white"
+              >
+                Workspace Data Export & Backup
+              </h2>
+              <p className="mt-1 text-xs text-slate-400">
+                Export projects, tasks, discussion threads, and audit history
+                for{" "}
+                <span className="font-medium text-cyan-300">
+                  {currentOrg.name}
+                </span>
+                .
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <a
+                href="/devflow-saas/api/export?format=json"
+                download
+                className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3.5 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 hover:text-white transition focus-visible:outline-2 focus-visible:outline-cyan-400"
+              >
+                <span>📥</span>
+                <span>Full Backup (JSON)</span>
+              </a>
+
+              <a
+                href="/devflow-saas/api/export?format=csv"
+                download
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition focus-visible:outline-2 focus-visible:outline-cyan-400"
+              >
+                <span>📊</span>
+                <span>Tasks Spreadsheet (CSV)</span>
+              </a>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   );

@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect, useMemo, useTransition } from "react";
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useTransition,
+  useSyncExternalStore,
+} from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import type { Project } from "../projects/types";
 import type { User, Organization } from "../lib/auth";
@@ -21,6 +28,8 @@ type CommandPaletteProps = Readonly<{
   allUsers: readonly User[];
 }>;
 
+const subscribe = () => () => {};
+
 export function CommandPalette({
   projects,
   allOrgs,
@@ -31,6 +40,13 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [, startTransition] = useTransition();
+
+  // Pure React 19 Client-Mounting (0 cascading renders)
+  const isMounted = useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false,
+  );
 
   // Listen for Cmd+K / Ctrl+K & Escape
   useEffect(() => {
@@ -182,6 +198,112 @@ export function CommandPalette({
     }
   };
 
+  const modalContent = isOpen ? (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command Palette"
+      className="fixed inset-0 z-9999 flex items-start justify-center p-4 pt-20 sm:pt-28"
+    >
+      {/* Backdrop */}
+      <div
+        onClick={() => setIsOpen(false)}
+        className="fixed inset-0 bg-slate-950/80 backdrop-blur-md transition-opacity"
+      />
+
+      {/* Spotlight Box */}
+      <div className="relative z-10 w-full max-w-xl overflow-hidden rounded-2xl border border-cyan-500/30 bg-slate-900 shadow-2xl transition-all">
+        {/* Search Input Bar */}
+        <div className="flex items-center border-b border-slate-800 px-4 py-3">
+          <span className="text-base text-slate-400">🔍</span>
+          <input
+            type="text"
+            autoFocus
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelectedIndex(0);
+            }}
+            onKeyDown={handleKeyNavigation}
+            placeholder="Type a command or search projects..."
+            className="ml-3 w-full bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:text-white"
+          >
+            ESC
+          </button>
+        </div>
+
+        {/* Results List */}
+        <div className="max-h-80 overflow-y-auto p-2">
+          {filteredCommands.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-500">
+              No commands found matching &ldquo;{query}&rdquo;.
+            </div>
+          ) : (
+            <ul className="space-y-1">
+              {filteredCommands.map((cmd, idx) => {
+                const isSelected = idx === selectedIndex;
+                return (
+                  <li key={cmd.id}>
+                    <button
+                      type="button"
+                      onClick={cmd.onSelect}
+                      onMouseEnter={() => setSelectedIndex(idx)}
+                      className={[
+                        "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition",
+                        isSelected
+                          ? "bg-cyan-500/10 text-white border border-cyan-500/30"
+                          : "text-slate-300 hover:bg-slate-800/60 border border-transparent",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm">{cmd.icon}</span>
+                        <div>
+                          <p className="font-semibold text-white">
+                            {cmd.title}
+                          </p>
+                          {cmd.subtitle && (
+                            <p className="text-[11px] text-slate-400">
+                              {cmd.subtitle}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-400">
+                        {cmd.category}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* Keyboard Footer */}
+        <div className="flex items-center justify-between border-t border-slate-800 bg-slate-950/60 px-4 py-2 text-[11px] text-slate-500">
+          <div className="flex items-center gap-3">
+            <span>
+              <kbd className="font-semibold text-slate-400">↑</kbd>{" "}
+              <kbd className="font-semibold text-slate-400">↓</kbd> Navigate
+            </span>
+            <span>
+              <kbd className="font-semibold text-slate-400">↵</kbd> Select
+            </span>
+          </div>
+          <span>
+            <kbd className="font-semibold text-slate-400">ESC</kbd> Close
+          </span>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       {/* Clickable Header Trigger */}
@@ -198,112 +320,8 @@ export function CommandPalette({
         </kbd>
       </button>
 
-      {/* Modal Dialog */}
-      {isOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Command Palette"
-          className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-20 sm:pt-28"
-        >
-          {/* Backdrop */}
-          <div
-            onClick={() => setIsOpen(false)}
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
-          />
-
-          {/* Spotlight Box */}
-          <div className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-cyan-500/30 bg-slate-900 shadow-2xl transition-all">
-            {/* Search Input Bar */}
-            <div className="flex items-center border-b border-slate-800 px-4 py-3">
-              <span className="text-base text-slate-400">🔍</span>
-              <input
-                type="text"
-                autoFocus
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setSelectedIndex(0);
-                }}
-                onKeyDown={handleKeyNavigation}
-                placeholder="Type a command or search projects..."
-                className="ml-3 w-full bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 hover:text-white"
-              >
-                ESC
-              </button>
-            </div>
-
-            {/* Results List */}
-            <div className="max-h-80 overflow-y-auto p-2">
-              {filteredCommands.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-500">
-                  No commands found matching &ldquo;{query}&rdquo;.
-                </div>
-              ) : (
-                <ul className="space-y-1">
-                  {filteredCommands.map((cmd, idx) => {
-                    const isSelected = idx === selectedIndex;
-                    return (
-                      <li key={cmd.id}>
-                        <button
-                          type="button"
-                          onClick={cmd.onSelect}
-                          onMouseEnter={() => setSelectedIndex(idx)}
-                          className={[
-                            "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs transition",
-                            isSelected
-                              ? "bg-cyan-500/10 text-white border border-cyan-500/30"
-                              : "text-slate-300 hover:bg-slate-800/60 border border-transparent",
-                          ].join(" ")}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm">{cmd.icon}</span>
-                            <div>
-                              <p className="font-semibold text-white">
-                                {cmd.title}
-                              </p>
-                              {cmd.subtitle && (
-                                <p className="text-[11px] text-slate-400">
-                                  {cmd.subtitle}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          <span className="rounded-md bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-400">
-                            {cmd.category}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-
-            {/* Keyboard Footer */}
-            <div className="flex items-center justify-between border-t border-slate-800 bg-slate-950/60 px-4 py-2 text-[11px] text-slate-500">
-              <div className="flex items-center gap-3">
-                <span>
-                  <kbd className="font-semibold text-slate-400">↑</kbd>{" "}
-                  <kbd className="font-semibold text-slate-400">↓</kbd> Navigate
-                </span>
-                <span>
-                  <kbd className="font-semibold text-slate-400">↵</kbd> Select
-                </span>
-              </div>
-              <span>
-                <kbd className="font-semibold text-slate-400">ESC</kbd> Close
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Render via Portal */}
+      {isMounted && modalContent && createPortal(modalContent, document.body)}
     </>
   );
 }

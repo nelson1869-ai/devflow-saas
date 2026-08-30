@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 type ShortcutCategory = Readonly<{
@@ -50,6 +51,8 @@ const shortcutGroups: readonly ShortcutCategory[] = [
   },
 ];
 
+const subscribe = () => () => {};
+
 export function KeyboardShortcutsModal() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -57,6 +60,13 @@ export function KeyboardShortcutsModal() {
     key: "",
     time: 0,
   });
+
+  // Pure React 19 Client-Mounting (0 cascading renders)
+  const isMounted = useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false,
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -118,6 +128,81 @@ export function KeyboardShortcutsModal() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, router]);
 
+  const modalContent = isOpen ? (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="shortcuts-heading"
+      className="fixed inset-0 z-9999 flex items-center justify-center p-4 overflow-y-auto"
+    >
+      {/* Full Screen Backdrop */}
+      <div
+        onClick={() => setIsOpen(false)}
+        className="fixed inset-0 bg-slate-950/80 backdrop-blur-md transition-opacity"
+      />
+
+      {/* Dialog Card */}
+      <div className="relative z-10 my-8 w-full max-w-2xl overflow-hidden rounded-2xl border border-cyan-500/30 bg-slate-900 shadow-2xl transition-all">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <span className="text-lg">⌨️</span>
+            <h2
+              id="shortcuts-heading"
+              className="text-base font-bold text-white"
+            >
+              Keyboard Shortcuts
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-400 hover:text-white"
+          >
+            ESC
+          </button>
+        </div>
+
+        {/* Shortcuts Content */}
+        <div className="max-h-[75vh] overflow-y-auto p-6 space-y-6">
+          {shortcutGroups.map((group) => (
+            <div key={group.category} className="space-y-2.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400">
+                {group.category}
+              </h3>
+              <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 divide-y divide-slate-800/60">
+                {group.items.map((item) => (
+                  <div
+                    key={item.description}
+                    className="flex items-center justify-between px-4 py-2.5 text-xs"
+                  >
+                    <span className="text-slate-300">{item.description}</span>
+                    <div className="flex items-center gap-1">
+                      {item.keys.map((k) => (
+                        <kbd
+                          key={k}
+                          className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] font-mono font-semibold text-slate-200 shadow-sm"
+                        >
+                          {k}
+                        </kbd>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="border-t border-slate-800 bg-slate-950/60 px-6 py-3 text-center text-xs text-slate-500">
+          Press <kbd className="font-semibold text-slate-400">?</kbd> anywhere
+          to toggle this guide
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       {/* Clickable Header Trigger Badge */}
@@ -131,83 +216,8 @@ export function KeyboardShortcutsModal() {
         ?
       </button>
 
-      {/* Modal Dialog */}
-      {isOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="shortcuts-heading"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
-        >
-          {/* Backdrop */}
-          <div
-            onClick={() => setIsOpen(false)}
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
-          />
-
-          {/* Dialog Card */}
-          <div className="relative my-8 w-full max-w-2xl overflow-hidden rounded-2xl border border-cyan-500/30 bg-slate-900 shadow-2xl transition-all">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
-              <div className="flex items-center gap-2.5">
-                <span className="text-lg">⌨️</span>
-                <h2
-                  id="shortcuts-heading"
-                  className="text-base font-bold text-white"
-                >
-                  Keyboard Shortcuts
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs font-semibold text-slate-400 hover:text-white"
-              >
-                ESC
-              </button>
-            </div>
-
-            {/* Shortcuts Content */}
-            <div className="max-h-[75vh] overflow-y-auto p-6 space-y-6">
-              {shortcutGroups.map((group) => (
-                <div key={group.category} className="space-y-2.5">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400">
-                    {group.category}
-                  </h3>
-                  <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 divide-y divide-slate-800/60">
-                    {group.items.map((item) => (
-                      <div
-                        key={item.description}
-                        className="flex items-center justify-between px-4 py-2.5 text-xs"
-                      >
-                        <span className="text-slate-300">
-                          {item.description}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          {item.keys.map((k) => (
-                            <kbd
-                              key={k}
-                              className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] font-mono font-semibold text-slate-200 shadow-sm"
-                            >
-                              {k}
-                            </kbd>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="border-t border-slate-800 bg-slate-950/60 px-6 py-3 text-center text-xs text-slate-500">
-              Press <kbd className="font-semibold text-slate-400">?</kbd>{" "}
-              anywhere to toggle this guide
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Render via Portal */}
+      {isMounted && modalContent && createPortal(modalContent, document.body)}
     </>
   );
 }

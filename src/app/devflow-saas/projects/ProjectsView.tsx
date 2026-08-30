@@ -6,6 +6,7 @@ import type { User, Organization } from "../lib/auth";
 import { ProjectCard } from "./ProjectCard";
 import { ProjectMetrics } from "./ProjectMetrics";
 import { createProjectAction, deleteProjectAction } from "../lib/actions";
+import { projectTemplates, type ProjectTemplate } from "../lib/templates";
 
 type ProjectsViewProps = Readonly<{
   initialProjects: readonly Project[];
@@ -31,10 +32,16 @@ export function ProjectsView({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Form State
-  const [name, setName] = useState("");
-  const [key, setKey] = useState("");
-  const [description, setDescription] = useState("");
+  // Template & Form State
+  const [selectedTemplateId, setSelectedTemplateId] =
+    useState<string>("scrum-sprint");
+  const defaultTemplate =
+    projectTemplates.find((t) => t.id === "scrum-sprint") ||
+    projectTemplates[0];
+
+  const [name, setName] = useState(defaultTemplate.name);
+  const [key, setKey] = useState(defaultTemplate.defaultKey);
+  const [description, setDescription] = useState(defaultTemplate.description);
   const [status, setStatus] = useState<ProjectStatus>("Active");
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -42,6 +49,19 @@ export function ProjectsView({
   if (initialProjects !== projects && !isPending) {
     setProjects(initialProjects);
   }
+
+  const handleSelectTemplate = (template: ProjectTemplate) => {
+    setSelectedTemplateId(template.id);
+    if (template.id !== "custom-blank") {
+      setName(template.name);
+      setKey(template.defaultKey);
+      setDescription(template.description);
+    } else {
+      setName("");
+      setKey("");
+      setDescription("");
+    }
+  };
 
   const handleCreateProject = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -67,6 +87,7 @@ export function ProjectsView({
     formData.append("key", trimmedKey);
     formData.append("description", trimmedDescription);
     formData.append("status", status);
+    formData.append("templateId", selectedTemplateId);
 
     // Optimistic UI update
     const optimisticProject: Project = {
@@ -90,6 +111,7 @@ export function ProjectsView({
         setKey("");
         setDescription("");
         setStatus("Active");
+        setSelectedTemplateId("scrum-sprint");
         setIsFormOpen(false);
       }
     });
@@ -131,6 +153,10 @@ export function ProjectsView({
     return matchesFilter && matchesSearch;
   });
 
+  const activeTemplate = projectTemplates.find(
+    (t) => t.id === selectedTemplateId,
+  );
+
   return (
     <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
       <div className="space-y-10">
@@ -163,7 +189,7 @@ export function ProjectsView({
           </button>
         </header>
 
-        {/* Collapsible Create Project Form */}
+        {/* Collapsible Create Project Form with Templates */}
         {isFormOpen && (
           <section
             aria-labelledby="create-project-heading"
@@ -185,7 +211,89 @@ export function ProjectsView({
               </div>
             )}
 
-            <form onSubmit={handleCreateProject} className="mt-4 space-y-4">
+            <form onSubmit={handleCreateProject} className="mt-5 space-y-6">
+              {/* Template Selector Cards */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Select Project Template
+                </label>
+                <div className="mt-2.5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {projectTemplates.map((template) => {
+                    const isSelected = selectedTemplateId === template.id;
+                    return (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => handleSelectTemplate(template)}
+                        className={[
+                          "flex flex-col items-start rounded-xl border p-3.5 text-left transition shadow-sm",
+                          isSelected
+                            ? "border-cyan-400 bg-cyan-500/10 ring-2 ring-cyan-400/30"
+                            : "border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-950",
+                        ].join(" ")}
+                      >
+                        <div className="flex w-full items-center justify-between">
+                          <span className="text-xl">{template.icon}</span>
+                          <span
+                            className={[
+                              "rounded px-1.5 py-0.5 text-[9px] font-mono font-bold",
+                              template.badgeColor,
+                            ].join(" ")}
+                          >
+                            {template.defaultKey}
+                          </span>
+                        </div>
+
+                        <p className="mt-2 font-bold text-white text-xs">
+                          {template.name}
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400 leading-tight">
+                          {template.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Starter Tasks Scaffolding Preview */}
+              {activeTemplate && activeTemplate.starterTasks.length > 0 && (
+                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-300">
+                      ⚡ Starter Tasks Scaffolding (
+                      {activeTemplate.starterTasks.length} tasks will be
+                      auto-generated)
+                    </p>
+                    <span className="text-[10px] font-mono text-cyan-400">
+                      Auto-populated in SQLite
+                    </span>
+                  </div>
+
+                  <ul className="mt-2.5 space-y-1.5">
+                    {activeTemplate.starterTasks.map((st, i) => (
+                      <li
+                        key={i}
+                        className="flex items-center justify-between rounded-lg border border-slate-800/80 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-300"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[10px] text-cyan-400">
+                            #{st.tag}
+                          </span>
+                          <span className="font-medium text-white">
+                            {st.title}
+                          </span>
+                        </div>
+                        <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
+                          {st.priority} Priority
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Project Fields */}
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="sm:col-span-2">
                   <label
@@ -218,54 +326,52 @@ export function ProjectsView({
                     type="text"
                     required
                     disabled={isPending}
-                    maxLength={6}
                     placeholder="e.g. BILL"
                     value={key}
                     onChange={(e) => setKey(e.target.value.toUpperCase())}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm uppercase text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
+                    maxLength={6}
+                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm uppercase text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
                   />
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="sm:col-span-2">
-                  <label
-                    htmlFor="project-description"
-                    className="block text-xs font-medium text-slate-300"
-                  >
-                    Description
-                  </label>
-                  <input
-                    id="project-description"
-                    type="text"
-                    required
-                    disabled={isPending}
-                    placeholder="Brief description of deliverables..."
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
-                  />
-                </div>
+              <div>
+                <label
+                  htmlFor="project-description"
+                  className="block text-xs font-medium text-slate-300"
+                >
+                  Description
+                </label>
+                <textarea
+                  id="project-description"
+                  rows={2}
+                  required
+                  disabled={isPending}
+                  placeholder="Describe the goals and deliverables..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
+                />
+              </div>
 
-                <div>
-                  <label
-                    htmlFor="project-status"
-                    className="block text-xs font-medium text-slate-300"
-                  >
-                    Initial Status
-                  </label>
-                  <select
-                    id="project-status"
-                    value={status}
-                    disabled={isPending}
-                    onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-                    className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Planning">Planning</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                </div>
+              <div>
+                <label
+                  htmlFor="project-status"
+                  className="block text-xs font-medium text-slate-300"
+                >
+                  Initial Status
+                </label>
+                <select
+                  id="project-status"
+                  value={status}
+                  disabled={isPending}
+                  onChange={(e) => setStatus(e.target.value as ProjectStatus)}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50 sm:w-48"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Planning">Planning</option>
+                  <option value="Completed">Completed</option>
+                </select>
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
@@ -281,97 +387,78 @@ export function ProjectsView({
                   disabled={isPending}
                   className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-50"
                 >
-                  {isPending ? "Saving to Database..." : "Create Project"}
+                  {isPending ? "Establishing Project..." : "Create Project"}
                 </button>
               </div>
             </form>
           </section>
         )}
 
+        {/* KPI Performance Metrics */}
         <ProjectMetrics projects={projects} />
 
-        <section aria-labelledby="projects-list-heading" className="space-y-6">
-          <div className="flex flex-col gap-4 border-b border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <h2
-                id="projects-list-heading"
-                className="text-base font-semibold text-white"
-              >
-                Workspace Projects
-              </h2>
-              <span className="text-xs text-slate-400">
-                ({filteredProjects.length} of {projects.length})
-              </span>
-            </div>
+        {/* Search & Filter Toolbar */}
+        <section
+          aria-labelledby="filter-section-heading"
+          className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <h2 id="filter-section-heading" className="sr-only">
+            Project Filters
+          </h2>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              {/* Search */}
-              <div className="relative">
-                <label htmlFor="project-search" className="sr-only">
-                  Search projects
-                </label>
-                <input
-                  id="project-search"
-                  type="search"
-                  placeholder="Search by name, key..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 transition hover:border-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 sm:w-52"
-                />
-              </div>
-
-              {/* Filter Tabs */}
-              <div
-                role="tablist"
-                aria-label="Filter projects by status"
-                className="flex flex-wrap gap-1.5"
-              >
-                {filterOptions.map((option) => {
-                  const isSelected = selectedFilter === option;
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      role="tab"
-                      aria-selected={isSelected}
-                      onClick={() => setSelectedFilter(option)}
-                      className={[
-                        "rounded-lg px-2.5 py-1 text-xs font-medium transition",
-                        "focus-visible:outline-2 focus-visible:outline-cyan-400",
-                        isSelected
-                          ? "bg-cyan-400 text-slate-950 shadow-sm"
-                          : "border border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700 hover:text-white",
-                      ].join(" ")}
-                    >
-                      {option}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+          <div
+            role="tablist"
+            aria-label="Filter projects by status"
+            className="flex flex-wrap gap-2"
+          >
+            {filterOptions.map((option) => {
+              const isSelected = selectedFilter === option;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  onClick={() => setSelectedFilter(option)}
+                  className={[
+                    "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                    "focus-visible:outline-2 focus-visible:outline-cyan-400",
+                    isSelected
+                      ? "bg-cyan-400 text-slate-950 shadow-sm"
+                      : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
+                  ].join(" ")}
+                >
+                  {option}
+                </button>
+              );
+            })}
           </div>
 
-          {/* List or Empty State */}
+          <div className="relative w-full sm:w-64">
+            <input
+              type="search"
+              placeholder="Filter by name, key, description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 transition hover:border-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+            />
+          </div>
+        </section>
+
+        {/* Project Cards Grid */}
+        <section aria-labelledby="project-list-heading">
+          <h2 id="project-list-heading" className="sr-only">
+            Project List
+          </h2>
+
           {filteredProjects.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-800 p-12 text-center">
-              <p className="text-sm font-medium text-slate-300">
-                No projects found in {currentOrg.name} matching your criteria.
+              <p className="text-sm text-slate-400">
+                No projects found matching your criteria.
               </p>
-              {(selectedFilter !== "All" || searchQuery.trim() !== "") && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedFilter("All");
-                    setSearchQuery("");
-                  }}
-                  className="mt-3 inline-flex items-center text-xs font-semibold text-cyan-400 hover:text-cyan-300"
-                >
-                  Clear search and filters
-                </button>
-              )}
             </div>
           ) : (
-            <ul className="grid gap-6 md:grid-cols-3">
+            <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {filteredProjects.map((project) => (
                 <ProjectCard
                   key={project.id}

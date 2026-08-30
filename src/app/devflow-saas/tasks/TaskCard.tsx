@@ -3,6 +3,7 @@ import type { Task, TaskPriority, TaskStatus } from "./types";
 type TaskCardProps = Readonly<{
   task: Task;
   onStatusChange?: (taskId: string, newStatus: TaskStatus) => void;
+  onEdit?: (task: Task) => void;
   onDelete?: (taskId: string) => void;
 }>;
 
@@ -20,7 +21,12 @@ const statusStyles: Readonly<Record<TaskStatus, string>> = {
   Done: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
 };
 
-export function TaskCard({ task, onStatusChange, onDelete }: TaskCardProps) {
+export function TaskCard({
+  task,
+  onStatusChange,
+  onEdit,
+  onDelete,
+}: TaskCardProps) {
   return (
     <li className="group relative rounded-xl border border-slate-800/90 bg-slate-900/70 p-4 transition hover:border-slate-700 shadow-sm">
       <div className="flex items-center justify-between gap-2">
@@ -66,7 +72,7 @@ export function TaskCard({ task, onStatusChange, onDelete }: TaskCardProps) {
           </span>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <span
             className={[
               "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
@@ -76,7 +82,26 @@ export function TaskCard({ task, onStatusChange, onDelete }: TaskCardProps) {
             {task.priority}
           </span>
 
-          {/* Delete Button */}
+          {/* Edit Task Button */}
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(task)}
+              aria-label={`Edit task ${task.title}`}
+              className="opacity-0 group-hover:opacity-100 transition rounded p-1 text-slate-500 hover:bg-cyan-500/10 hover:text-cyan-400 focus:opacity-100 focus-visible:outline-2 focus-visible:outline-cyan-400"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-3.5 w-3.5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+              </svg>
+            </button>
+          )}
+
+          {/* Delete Task Button */}
           {onDelete && (
             <button
               type="button"

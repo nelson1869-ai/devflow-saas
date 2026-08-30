@@ -4,8 +4,10 @@ import { useState, useTransition } from "react";
 import type { Task, TaskPriority, TaskStatus } from "../../tasks/types";
 import type { User } from "../../lib/auth";
 import { TaskCard } from "../../tasks/TaskCard";
+import { EditTaskModal } from "../../tasks/EditTaskModal";
 import {
   createTaskAction,
+  updateTaskAction,
   updateTaskStatusAction,
   deleteTaskAction,
 } from "../../lib/actions";
@@ -69,6 +71,7 @@ export function ProjectTasksView({
   const [tasks, setTasks] = useState<readonly Task[]>(initialTasks);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // Filter States
@@ -141,6 +144,31 @@ export function ProjectTasksView({
         setPriority("Medium");
         setAssigneeName(currentUser.name);
         setIsFormOpen(false);
+      }
+    });
+  };
+
+  const handleSaveTask = (updatedTask: Task) => {
+    // Optimistic UI update
+    setTasks((prev) =>
+      prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)),
+    );
+    setEditingTask(null);
+
+    const formData = new FormData();
+    formData.append("taskId", updatedTask.id);
+    formData.append("projectId", projectId);
+    formData.append("title", updatedTask.title);
+    formData.append("description", updatedTask.description);
+    formData.append("status", updatedTask.status);
+    formData.append("priority", updatedTask.priority);
+    formData.append("assigneeName", updatedTask.assigneeName);
+
+    startTransition(async () => {
+      const res = await updateTaskAction(formData);
+      if (!res.success) {
+        alert(res.error || "Failed to update task.");
+        setTasks(initialTasks);
       }
     });
   };
@@ -282,7 +310,6 @@ export function ProjectTasksView({
 
       {/* Advanced Filter Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
-        {/* Search */}
         <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
           <input
             type="search"
@@ -293,7 +320,6 @@ export function ProjectTasksView({
           />
         </div>
 
-        {/* Quick "My Tasks" Toggle */}
         <button
           type="button"
           onClick={() => setOnlyMyTasks((prev) => !prev)}
@@ -308,7 +334,6 @@ export function ProjectTasksView({
           <span>Only My Tasks</span>
         </button>
 
-        {/* Assignee Filter (if not in My Tasks mode) */}
         {!onlyMyTasks && (
           <select
             value={selectedAssignee}
@@ -325,7 +350,6 @@ export function ProjectTasksView({
           </select>
         )}
 
-        {/* Priority Filter */}
         <select
           value={selectedPriority}
           onChange={(e) =>
@@ -341,7 +365,6 @@ export function ProjectTasksView({
           ))}
         </select>
 
-        {/* Grid Status Tabs (Only in Grid mode) */}
         {viewMode === "grid" && (
           <div
             role="tablist"
@@ -371,7 +394,6 @@ export function ProjectTasksView({
           </div>
         )}
 
-        {/* Clear Filters Button */}
         {hasActiveFilters && (
           <button
             type="button"
@@ -561,6 +583,7 @@ export function ProjectTasksView({
                           key={task.id}
                           task={task}
                           onStatusChange={handleStatusChange}
+                          onEdit={(t) => setEditingTask(t)}
                           onDelete={handleDeleteTask}
                         />
                       ))}
@@ -594,10 +617,23 @@ export function ProjectTasksView({
               key={task.id}
               task={task}
               onStatusChange={handleStatusChange}
+              onEdit={(t) => setEditingTask(t)}
               onDelete={handleDeleteTask}
             />
           ))}
         </ul>
+      )}
+
+      {/* Edit Task Modal */}
+      {editingTask && (
+        <EditTaskModal
+          task={editingTask}
+          allUsers={allUsers}
+          isOpen={Boolean(editingTask)}
+          onClose={() => setEditingTask(null)}
+          onSave={handleSaveTask}
+          isPending={isPending}
+        />
       )}
     </section>
   );

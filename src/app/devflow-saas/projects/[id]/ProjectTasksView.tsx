@@ -72,6 +72,7 @@ export function ProjectTasksView({
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // Filter States
@@ -310,7 +311,7 @@ export function ProjectTasksView({
 
       {/* Advanced Filter Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
-        <div className="relative min-w-45 flex-1 sm:max-w-xs">
+        <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
           <input
             type="search"
             placeholder="Search tasks or assignees..."
@@ -546,17 +547,44 @@ export function ProjectTasksView({
         </div>
       )}
 
-      {/* Kanban Board View */}
+      {/* Kanban Board View with Drag & Drop */}
       {viewMode === "kanban" ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {kanbanColumns.map((col) => {
             const columnTasks = filteredTasks.filter(
               (t) => t.status === col.status,
             );
+            const isOverThisColumn = dragOverColumn === col.status;
+
             return (
               <div
                 key={col.status}
-                className="flex flex-col rounded-2xl border border-slate-800/80 bg-slate-900/40 p-4"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  if (dragOverColumn !== col.status) {
+                    setDragOverColumn(col.status);
+                  }
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setDragOverColumn(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOverColumn(null);
+                  const taskId = e.dataTransfer.getData("text/plain");
+                  if (taskId) {
+                    handleStatusChange(taskId, col.status);
+                  }
+                }}
+                className={[
+                  "flex flex-col rounded-2xl border p-4 transition-all duration-150",
+                  isOverThisColumn
+                    ? "border-cyan-400 bg-cyan-500/10 ring-2 ring-cyan-400/30 scale-[1.01]"
+                    : "border-slate-800/80 bg-slate-900/40",
+                ].join(" ")}
               >
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <h3
@@ -570,7 +598,14 @@ export function ProjectTasksView({
                 </div>
 
                 <div className="mt-4 flex-1">
-                  {columnTasks.length === 0 ? (
+                  {/* Drop Placeholder Zone when dragging over */}
+                  {isOverThisColumn && (
+                    <div className="mb-3 rounded-xl border-2 border-dashed border-cyan-400/60 bg-cyan-500/10 p-3 text-center text-xs font-semibold text-cyan-300 animate-pulse">
+                      Drop here to move to {col.label}
+                    </div>
+                  )}
+
+                  {columnTasks.length === 0 && !isOverThisColumn ? (
                     <div className="rounded-xl border border-dashed border-slate-800/60 p-6 text-center">
                       <p className="text-xs text-slate-500">
                         No {col.label.toLowerCase()} tasks
@@ -585,6 +620,7 @@ export function ProjectTasksView({
                           onStatusChange={handleStatusChange}
                           onEdit={(t) => setEditingTask(t)}
                           onDelete={handleDeleteTask}
+                          isDraggable={true}
                         />
                       ))}
                     </ul>
@@ -619,6 +655,7 @@ export function ProjectTasksView({
               onStatusChange={handleStatusChange}
               onEdit={(t) => setEditingTask(t)}
               onDelete={handleDeleteTask}
+              isDraggable={false}
             />
           ))}
         </ul>
@@ -627,6 +664,7 @@ export function ProjectTasksView({
       {/* Edit Task Modal */}
       {editingTask && (
         <EditTaskModal
+          key={editingTask.id}
           task={editingTask}
           allUsers={allUsers}
           isOpen={Boolean(editingTask)}

@@ -12,6 +12,7 @@ import {
   type WebhookEventType,
   type WebhookServicePreset,
 } from "./webhooks";
+import type { MilestoneStatus } from "./milestones";
 import type { TagColor } from "./tags";
 import type { ProjectStatus } from "../projects/types";
 import type { TaskPriority, TaskStatus, TaskTag } from "../tasks/types";
@@ -632,6 +633,8 @@ export async function createTaskAction(
 ): Promise<ActionResponse> {
   const currentUser = await getCurrentUser();
   const projectId = (formData.get("projectId") as string | null)?.trim();
+  const milestoneId =
+    (formData.get("milestoneId") as string | null)?.trim() || null;
   const title = (formData.get("title") as string | null)?.trim();
   const description = (formData.get("description") as string | null)?.trim();
   const status = (formData.get("status") as TaskStatus | null) || "Todo";
@@ -648,13 +651,14 @@ export async function createTaskAction(
   try {
     const id = `task-${Date.now()}`;
     const stmt = db.prepare(`
-      INSERT INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO devflow_tasks (id, project_id, milestone_id, title, description, status, priority, assignee_name, tag, due_date)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
       id,
       projectId,
+      milestoneId,
       title,
       description,
       status,
@@ -729,6 +733,8 @@ export async function updateTaskAction(
   const currentUser = await getCurrentUser();
   const taskId = (formData.get("taskId") as string | null)?.trim();
   const projectId = (formData.get("projectId") as string | null)?.trim();
+  const milestoneId =
+    (formData.get("milestoneId") as string | null)?.trim() || null;
   const title = (formData.get("title") as string | null)?.trim();
   const description = (formData.get("description") as string | null)?.trim();
   const status = (formData.get("status") as TaskStatus | null) || "Todo";
@@ -745,7 +751,7 @@ export async function updateTaskAction(
   try {
     const stmt = db.prepare(`
       UPDATE devflow_tasks
-      SET title = ?, description = ?, status = ?, priority = ?, assignee_name = ?, tag = ?, due_date = ?
+      SET title = ?, description = ?, status = ?, priority = ?, assignee_name = ?, tag = ?, due_date = ?, milestone_id = ?
       WHERE id = ?
     `);
 
@@ -757,6 +763,7 @@ export async function updateTaskAction(
       assigneeName,
       tag,
       dueDate,
+      milestoneId,
       taskId,
     );
 
@@ -1508,5 +1515,123 @@ export async function testDispatchWebhookAction(
     return { success: true };
   } catch {
     return { success: false, error: "Failed to send test ping." };
+  }
+}
+
+// ==========================================
+// SPRINT MILESTONE OPERATIONS (Phase 62)
+// ==========================================
+
+export async function createMilestoneAction(
+  formData: FormData,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  const cookieStore = await cookies();
+  const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
+
+  const projectId = (formData.get("projectId") as string | null)?.trim();
+  const title = (formData.get("title") as string | null)?.trim();
+  const description = (formData.get("description") as string | null)?.trim();
+  const targetDate = (formData.get("targetDate") as string | null)?.trim();
+
+  if (!projectId || !title || !targetDate) {
+    return {
+      success: false,
+      error: "Project, Milestone Title, and Target Date are required.",
+    };
+  }
+
+  try {
+    const id = `ms-${Date.now()}`;
+    const stmt = db.prepare(`
+      INSERT INTO devflow_milestones (id, org_id, project_id, title, description, target_date, status)
+      VALUES (?, ?, ?, ?, ?, ?, 'Active')
+    `);
+
+    stmt.run(id, orgId, projectId, title, description || null, targetDate);
+
+    logActivity(
+      orgId,
+      projectId,
+      currentUser.name,
+      "created_project",
+      title,
+      `Established sprint milestone goal targeting ${targetDate}.`,
+    );
+
+    revalidatePath("/devflow-saas/analytics");
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to create milestone in database." };
+  }
+}
+
+export async function updateMilestoneStatusAction(
+  milestoneId: string,
+  newStatus: MilestoneStatus,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  try {
+    const stmt = db.prepare(
+      "UPDATE devflow_milestones SET status = ? WHERE id = ?",
+    );
+    stmt.run(newStatus, milestoneId);
+
+    const msStmt = db.prepare(
+      "SELECT org_id, project_id, title FROM devflow_milestones WHERE id = ?",
+    );
+    const ms = msStmt.get(milestoneId) as
+      | { org_id: string; project_id: string; title: string }
+      | undefined;
+
+    if (ms) {
+      logActivity(
+        ms.org_id,
+        ms.project_id,
+        currentUser.name,
+        "updated_project",
+        ms.title,
+        `Sprint milestone marked as ${newStatus}.`,
+      );
+    }
+
+    revalidatePath("/devflow-saas/analytics");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to update milestone status." };
+  }
+}
+
+export async function deleteMilestoneAction(
+  milestoneId: string,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  try {
+    const msStmt = db.prepare(
+      "SELECT org_id, project_id, title FROM devflow_milestones WHERE id = ?",
+    );
+    const ms = msStmt.get(milestoneId) as
+      | { org_id: string; project_id: string; title: string }
+      | undefined;
+
+    const stmt = db.prepare("DELETE FROM devflow_milestones WHERE id = ?");
+    stmt.run(milestoneId);
+
+    if (ms) {
+      logActivity(
+        ms.org_id,
+        ms.project_id,
+        currentUser.name,
+        "deleted_project",
+        ms.title,
+        "Removed sprint milestone goal.",
+      );
+    }
+
+    revalidatePath("/devflow-saas/analytics");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to delete milestone." };
   }
 }

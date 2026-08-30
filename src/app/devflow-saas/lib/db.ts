@@ -49,9 +49,23 @@ try {
       FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS devflow_milestones (
+      id TEXT PRIMARY KEY,
+      org_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      target_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Active',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS devflow_tasks (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
+      milestone_id TEXT,
       title TEXT NOT NULL,
       description TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'Todo',
@@ -59,7 +73,8 @@ try {
       assignee_name TEXT NOT NULL,
       tag TEXT NOT NULL DEFAULT 'feature',
       due_date TEXT,
-      FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
+      FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (milestone_id) REFERENCES devflow_milestones(id) ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS devflow_task_dependencies (
@@ -141,7 +156,7 @@ try {
     );
   `);
 
-  // Migration for is_archived and archived_at
+  // Runtime self-healing migrations for existing SQLite databases
   try {
     db.exec(
       `ALTER TABLE devflow_projects ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;`,
@@ -152,6 +167,9 @@ try {
   } catch {}
   try {
     db.exec(`ALTER TABLE devflow_activities ADD COLUMN task_id TEXT;`);
+  } catch {}
+  try {
+    db.exec(`ALTER TABLE devflow_tasks ADD COLUMN milestone_id TEXT;`);
   } catch {}
 } catch (e) {
   console.error("Database self-healing migration warning:", e);

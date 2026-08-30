@@ -1,10 +1,22 @@
 import Link from "next/link";
-import { getCurrentOrg } from "../lib/auth";
+import { getCurrentOrg, getCurrentUser } from "../lib/auth";
 import { getWorkspaceAnalytics } from "../lib/analytics";
+import { getProjectsByOrgId } from "../lib/queries";
+import { getMilestonesByOrgId } from "../lib/milestones";
+import { WorkloadHeatmap } from "./WorkloadHeatmap";
+import { SprintBurndownTracker } from "./SprintBurndownTracker";
 
 export default async function AnalyticsPage() {
-  const currentOrg = await getCurrentOrg();
-  const analytics = getWorkspaceAnalytics(currentOrg.id);
+  const [currentUser, currentOrg] = await Promise.all([
+    getCurrentUser(),
+    getCurrentOrg(),
+  ]);
+
+  const [analytics, projects, milestones] = await Promise.all([
+    getWorkspaceAnalytics(currentOrg.id),
+    getProjectsByOrgId(currentOrg.id),
+    getMilestonesByOrgId(currentOrg.id),
+  ]);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
@@ -13,10 +25,11 @@ export default async function AnalyticsPage() {
         <header className="flex flex-col gap-4 border-b border-slate-800/80 pb-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
             <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Engineering Velocity
+              Engineering Velocity & Capacity
             </h1>
             <p className="text-sm text-slate-400">
-              Live delivery metrics, team throughput, and project progress for{" "}
+              Live delivery metrics, sprint burndown velocity, and developer
+              capacity heatmap for{" "}
               <span className="font-medium text-cyan-300">
                 {currentOrg.name}
               </span>
@@ -58,264 +71,121 @@ export default async function AnalyticsPage() {
 
           <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-sm">
             <p className="text-xs font-medium text-slate-400">
-              In Flight (Active)
+              Active Sprints & In Flight
             </p>
             <p className="mt-2 text-3xl font-bold text-cyan-400">
               {analytics.inProgressTasks + analytics.reviewTasks}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              {analytics.inProgressTasks} in progress • {analytics.reviewTasks}{" "}
+              {analytics.inProgressTasks} in progress, {analytics.reviewTasks}{" "}
               in review
             </p>
           </div>
 
           <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-sm">
             <p className="text-xs font-medium text-slate-400">
-              Urgent Deliverables
+              Overdue Deliverables
             </p>
-            <p className="mt-2 text-3xl font-bold text-rose-400">
-              {analytics.urgentTasks}
+            <p
+              className={`mt-2 text-3xl font-bold ${
+                analytics.overdueTasksCount > 0
+                  ? "text-rose-400"
+                  : "text-emerald-400"
+              }`}
+            >
+              {analytics.overdueTasksCount}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              High priority tasks requiring attention
+              {analytics.overdueTasksCount > 0
+                ? "Immediate attention required"
+                : "All delivery dates healthy"}
             </p>
           </div>
         </div>
 
-        {/* Workflow Stage Distribution Multi-Segment Bar */}
-        <section
-          aria-labelledby="stages-heading"
-          className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6"
-        >
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        {/* Interactive Sprint Burndown & Milestone Tracker (Phase 62) */}
+        <SprintBurndownTracker
+          milestones={milestones}
+          projects={projects}
+          currentUser={currentUser}
+        />
+
+        {/* Developer Workload & Capacity Heatmap */}
+        <WorkloadHeatmap memberCapacities={analytics.memberCapacities} />
+
+        {/* Project Health & Throughput Breakdown */}
+        <section aria-labelledby="project-health-heading" className="space-y-4">
+          <div className="flex items-center justify-between">
             <h2
-              id="stages-heading"
-              className="text-base font-semibold text-white"
+              id="project-health-heading"
+              className="text-lg font-bold text-white"
             >
-              Workflow Stage Distribution
+              Project Delivery Health
             </h2>
-            <span className="text-xs text-slate-400">
-              {analytics.totalTasks} total tasks
-            </span>
+            <Link
+              href="/devflow-saas/projects"
+              className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition"
+            >
+              Manage Projects →
+            </Link>
           </div>
 
-          {/* Multi-color Progress Track */}
-          <div className="mt-6 flex h-4 w-full overflow-hidden rounded-full bg-slate-800">
-            {analytics.stageBreakdown.map((stage) =>
-              stage.percentage > 0 ? (
-                <div
-                  key={stage.status}
-                  style={{ width: `${stage.percentage}%` }}
-                  className={`${stage.color} transition-all duration-500`}
-                  title={`${stage.status}: ${stage.count} tasks (${stage.percentage}%)`}
-                />
-              ) : null,
-            )}
-          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {analytics.projectVelocities.map((project) => (
+              <div
+                key={project.id}
+                className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 shadow-sm space-y-4"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="font-mono text-xs font-bold text-cyan-400">
+                      {project.key}
+                    </span>
+                    <h3 className="text-sm font-bold text-white">
+                      {project.name}
+                    </h3>
+                  </div>
+                  <span
+                    className={[
+                      "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                      project.status === "Active"
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                        : "border-slate-700 bg-slate-800 text-slate-300",
+                    ].join(" ")}
+                  >
+                    {project.status}
+                  </span>
+                </div>
 
-          {/* Legend Grid */}
-          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {analytics.stageBreakdown.map((stage) => (
-              <div key={stage.status} className="flex items-center gap-3">
-                <span
-                  aria-hidden="true"
-                  className={`h-3 w-3 rounded-full ${stage.color}`}
-                />
-                <div>
-                  <p className="text-xs font-medium text-slate-300">
-                    {stage.status}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {stage.count} ({stage.percentage}%)
-                  </p>
+                {/* Progress Bar */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-slate-400">
+                    <span>Progress</span>
+                    <span className="font-mono font-bold text-white">
+                      {project.progressPercentage}%
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-slate-800">
+                    <div
+                      className="h-2 rounded-full bg-cyan-400 transition-all duration-500"
+                      style={{ width: `${project.progressPercentage}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-800/80 pt-3 flex justify-between items-center text-xs">
+                  <span className="text-slate-400 font-mono">
+                    {project.completedTasks} / {project.totalTasks} completed
+                  </span>
+                  <Link
+                    href={`/devflow-saas/projects/${project.id}`}
+                    className="font-semibold text-cyan-400 hover:text-cyan-300 transition"
+                  >
+                    Open Board →
+                  </Link>
                 </div>
               </div>
             ))}
-          </div>
-        </section>
-
-        {/* Team Workload & Project Velocity Grid */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Team Workload */}
-          <section
-            aria-labelledby="team-workload-heading"
-            className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6"
-          >
-            <h2
-              id="team-workload-heading"
-              className="text-base font-semibold text-white"
-            >
-              Engineer Workload & Efficiency
-            </h2>
-            <p className="mt-1 text-xs text-slate-400">
-              Tasks assigned and completion efficiency per team member.
-            </p>
-
-            <div className="mt-6 space-y-4">
-              {analytics.teamWorkload.length === 0 ? (
-                <p className="text-xs text-slate-500 italic">
-                  No assigned tasks found.
-                </p>
-              ) : (
-                analytics.teamWorkload.map((member) => {
-                  const initials = member.assigneeName
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .toUpperCase();
-
-                  return (
-                    <div
-                      key={member.assigneeName}
-                      className="rounded-xl border border-slate-800/60 bg-slate-950/50 p-4"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <span
-                            aria-hidden="true"
-                            className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 text-xs font-bold text-slate-200"
-                          >
-                            {initials}
-                          </span>
-                          <div>
-                            <p className="text-xs font-semibold text-white">
-                              {member.assigneeName}
-                            </p>
-                            <p className="text-[11px] text-slate-400">
-                              {member.completed} completed • {member.inProgress}{" "}
-                              in flight
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="text-right">
-                          <span className="text-xs font-bold text-cyan-400">
-                            {member.efficiency}%
-                          </span>
-                          <p className="text-[10px] text-slate-500">
-                            {member.total} tasks
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 h-1.5 w-full rounded-full bg-slate-800">
-                        <div
-                          className="h-1.5 rounded-full bg-cyan-400"
-                          style={{ width: `${member.efficiency}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </section>
-
-          {/* Project Velocities Matrix */}
-          <section
-            aria-labelledby="projects-velocity-heading"
-            className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6"
-          >
-            <h2
-              id="projects-velocity-heading"
-              className="text-base font-semibold text-white"
-            >
-              Project Delivery Matrix
-            </h2>
-            <p className="mt-1 text-xs text-slate-400">
-              Task burn-down progress for workspace projects.
-            </p>
-
-            <div className="mt-6 space-y-4">
-              {analytics.projectVelocities.length === 0 ? (
-                <p className="text-xs text-slate-500 italic">
-                  No projects established in this workspace.
-                </p>
-              ) : (
-                analytics.projectVelocities.map((project) => (
-                  <Link
-                    key={project.id}
-                    href={`/devflow-saas/projects/${project.id}`}
-                    className="block rounded-xl border border-slate-800/60 bg-slate-950/50 p-4 transition hover:border-slate-700"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-[10px] font-bold text-cyan-400">
-                          {project.key}
-                        </span>
-                        <p className="text-xs font-semibold text-white">
-                          {project.name}
-                        </p>
-                      </div>
-
-                      <span className="text-xs font-bold text-emerald-400">
-                        {project.progressPercentage}%
-                      </span>
-                    </div>
-
-                    <div className="mt-3 h-1.5 w-full rounded-full bg-slate-800">
-                      <div
-                        className="h-1.5 rounded-full bg-emerald-400"
-                        style={{ width: `${project.progressPercentage}%` }}
-                      />
-                    </div>
-
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                      <span>Status: {project.status}</span>
-                      <span>
-                        {project.completedTasks} of {project.totalTasks} tasks
-                        done
-                      </span>
-                    </div>
-                  </Link>
-                ))
-              )}
-            </div>
-          </section>
-        </div>
-
-        {/* Data Export & Portability */}
-        <section
-          aria-labelledby="export-heading"
-          className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 sm:p-8"
-        >
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2
-                id="export-heading"
-                className="text-base font-semibold text-white"
-              >
-                Workspace Data Export & Backup
-              </h2>
-              <p className="mt-1 text-xs text-slate-400">
-                Export projects, tasks, discussion threads, and audit history
-                for{" "}
-                <span className="font-medium text-cyan-300">
-                  {currentOrg.name}
-                </span>
-                .
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <a
-                href="/devflow-saas/api/export?format=json"
-                download
-                className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3.5 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20 hover:text-white transition focus-visible:outline-2 focus-visible:outline-cyan-400"
-              >
-                <span>📥</span>
-                <span>Full Backup (JSON)</span>
-              </a>
-
-              <a
-                href="/devflow-saas/api/export?format=csv"
-                download
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition focus-visible:outline-2 focus-visible:outline-cyan-400"
-              >
-                <span>📊</span>
-                <span>Tasks Spreadsheet (CSV)</span>
-              </a>
-            </div>
           </div>
         </section>
       </div>

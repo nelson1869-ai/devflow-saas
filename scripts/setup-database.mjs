@@ -49,11 +49,28 @@ db.exec(`
   );
 `);
 
-// 4. Tasks
+// 4. Milestones (Phase 62)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS devflow_milestones (
+    id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    target_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Active',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
+  );
+`);
+
+// 5. Tasks (with milestone_id)
 db.exec(`
   CREATE TABLE IF NOT EXISTS devflow_tasks (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
+    milestone_id TEXT,
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'Todo',
@@ -61,11 +78,12 @@ db.exec(`
     assignee_name TEXT NOT NULL,
     tag TEXT NOT NULL DEFAULT 'feature',
     due_date TEXT,
-    FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
+    FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (milestone_id) REFERENCES devflow_milestones(id) ON DELETE SET NULL
   );
 `);
 
-// 5. Task Dependencies & Blockers
+// 6. Task Dependencies & Blockers
 db.exec(`
   CREATE TABLE IF NOT EXISTS devflow_task_dependencies (
     id TEXT PRIMARY KEY,
@@ -78,7 +96,7 @@ db.exec(`
   );
 `);
 
-// 6. Comments
+// 7. Comments
 db.exec(`
   CREATE TABLE IF NOT EXISTS devflow_comments (
     id TEXT PRIMARY KEY,
@@ -91,7 +109,7 @@ db.exec(`
   );
 `);
 
-// 7. Activity Logs
+// 8. Activity Logs
 db.exec(`
   CREATE TABLE IF NOT EXISTS devflow_activities (
     id TEXT PRIMARY KEY,
@@ -106,7 +124,7 @@ db.exec(`
   );
 `);
 
-// 8. Notifications
+// 9. Notifications
 db.exec(`
   CREATE TABLE IF NOT EXISTS devflow_notifications (
     id TEXT PRIMARY KEY,
@@ -121,7 +139,7 @@ db.exec(`
   );
 `);
 
-// 9. Workspace Domain Tags
+// 10. Workspace Domain Tags
 db.exec(`
   CREATE TABLE IF NOT EXISTS devflow_tags (
     id TEXT PRIMARY KEY,
@@ -134,7 +152,7 @@ db.exec(`
   );
 `);
 
-// 10. Webhooks & Integrations (Phase 61)
+// 11. Webhooks & Integrations
 db.exec(`
   CREATE TABLE IF NOT EXISTS devflow_webhooks (
     id TEXT PRIMARY KEY,
@@ -150,7 +168,7 @@ db.exec(`
   );
 `);
 
-// 11. Webhook Deliveries (Phase 61)
+// 12. Webhook Deliveries
 db.exec(`
   CREATE TABLE IF NOT EXISTS devflow_webhook_deliveries (
     id TEXT PRIMARY KEY,
@@ -243,54 +261,34 @@ if (tagCount === 0) {
   );
 }
 
-const webhookCount = db
-  .prepare("SELECT count(*) as count FROM devflow_webhooks")
+const milestoneCount = db
+  .prepare("SELECT count(*) as count FROM devflow_milestones")
   .get().count;
-if (webhookCount === 0) {
-  console.log("Seeding Initial Webhooks...");
-  const insertWebhook = db.prepare(`
-    INSERT INTO devflow_webhooks (id, org_id, name, target_url, service_preset, event_type, secret, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  insertWebhook.run(
-    "wh-1",
-    "org-1",
-    "#engineering-feed",
-    "https://hooks.slack.com/services/T00/B00/devflow-demo",
-    "slack",
-    "all",
-    "whsec_slack_sample_key_9283",
-    1,
-  );
-  insertWebhook.run(
-    "wh-2",
-    "org-1",
-    "#discord-releases",
-    "https://discord.com/api/webhooks/12345/devflow-token",
-    "discord",
-    "task.completed",
-    "whsec_discord_sample_key_4412",
-    1,
-  );
-
-  const insertDelivery = db.prepare(`
-    INSERT INTO devflow_webhook_deliveries (id, webhook_id, event_type, payload_json, response_status, duration_ms, delivered_at)
+if (milestoneCount === 0) {
+  console.log("Seeding Initial Milestones...");
+  const insertMilestone = db.prepare(`
+    INSERT INTO devflow_milestones (id, org_id, project_id, title, description, target_date, status)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  insertDelivery.run(
-    "del-1",
-    "wh-1",
-    "task.completed",
-    JSON.stringify({
-      event: "task.completed",
-      task: { title: "OAuth2 Provider Integration", status: "Done" },
-      triggeredBy: "Nelson",
-      timestamp: new Date().toISOString(),
-    }),
-    200,
-    38,
-    "Just now",
+
+  const targetDate = new Date();
+  targetDate.setDate(targetDate.getDate() + 14);
+  const targetIso = targetDate.toISOString().split("T")[0];
+
+  insertMilestone.run(
+    "ms-1",
+    "org-1",
+    "proj-1",
+    "Sprint 24: Core Security & Auth Release",
+    "Complete authentication hardening, rate limiting, and RBAC authorization flow.",
+    targetIso,
+    "Active",
   );
+
+  // Link existing tasks in proj-1 to this sprint milestone
+  db.prepare(
+    "UPDATE devflow_tasks SET milestone_id = 'ms-1' WHERE project_id = 'proj-1'",
+  ).run();
 }
 
 console.log("✅ Database schema and seeds successfully initialized.");

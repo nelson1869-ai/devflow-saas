@@ -31,11 +31,11 @@ export function UserMenu({ currentUser, allUsers }: UserMenuProps) {
     .toUpperCase();
 
   return (
-    <div className="flex items-center gap-3">
-      {/* Role Badge */}
+    <div className="flex items-center gap-1.5 sm:gap-3">
+      {/* Role Badge - Hidden on Mobile to prevent squishing */}
       <span
         className={[
-          "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
+          "hidden md:inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
           roleBadgeStyles[currentUser.role],
         ].join(" ")}
       >
@@ -43,7 +43,7 @@ export function UserMenu({ currentUser, allUsers }: UserMenuProps) {
       </span>
 
       {/* User Switcher Dropdown */}
-      <div className="relative inline-flex items-center gap-2">
+      <div className="relative inline-flex items-center gap-1.5 sm:gap-2">
         <label htmlFor="user-switcher" className="sr-only">
           Switch active team member
         </label>
@@ -52,7 +52,7 @@ export function UserMenu({ currentUser, allUsers }: UserMenuProps) {
           value={currentUser.id}
           disabled={isPending}
           onChange={(e) => handleUserChange(e.target.value)}
-          className="rounded-lg border border-slate-800 bg-slate-900/90 py-1 pl-2.5 pr-8 text-xs font-medium text-slate-200 cursor-pointer transition hover:border-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
+          className="hidden sm:inline-block max-w-[130px] sm:max-w-none truncate rounded-lg border border-slate-800 bg-slate-900/90 py-1 pl-2.5 pr-7 text-xs font-medium text-slate-200 cursor-pointer transition hover:border-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
         >
           {allUsers.map((u) => (
             <option
@@ -65,10 +65,11 @@ export function UserMenu({ currentUser, allUsers }: UserMenuProps) {
           ))}
         </select>
 
-        {/* User Avatar */}
+        {/* User Avatar Initials Badge */}
         <div
-          aria-hidden="true"
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-xs font-bold text-slate-200"
+          title={`${currentUser.name} (${currentUser.role})`}
+          aria-label={`Current user: ${currentUser.name}`}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-xs font-bold text-slate-200"
         >
           {initials}
         </div>

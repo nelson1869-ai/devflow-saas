@@ -19,7 +19,7 @@ export function WorkspaceMenu({ currentOrg, allOrgs }: WorkspaceMenuProps) {
   };
 
   return (
-    <div className="relative inline-flex items-center gap-2">
+    <div className="hidden sm:inline-flex relative items-center gap-2">
       <label htmlFor="workspace-switcher" className="sr-only">
         Switch organization workspace
       </label>

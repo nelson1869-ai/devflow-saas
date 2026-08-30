@@ -42,9 +42,9 @@ export function NotificationBell({
     });
   }, [initialNotifications, readIds, isAllReadLocally]);
 
-  // Click outside listener
+  // Click & Touch outside listener
   useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setIsOpen(false);
       }
@@ -52,8 +52,12 @@ export function NotificationBell({
 
     if (isOpen) {
       document.addEventListener("mousedown", handleOutsideClick);
+      document.addEventListener("touchstart", handleOutsideClick);
     }
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+    };
   }, [isOpen]);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
@@ -87,7 +91,10 @@ export function NotificationBell({
       {/* Bell Trigger Button */}
       <button
         type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen((prev) => !prev);
+        }}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-label={`Notifications (${unreadCount} unread)`}
@@ -108,7 +115,7 @@ export function NotificationBell({
         <div
           role="menu"
           aria-label="Notification Center"
-          className="absolute right-0 z-50 mt-2 w-80 sm:w-96 rounded-2xl border border-slate-800 bg-slate-900/95 shadow-2xl backdrop-blur-md overflow-hidden"
+          className="fixed inset-x-3 top-14 z-[9999] max-w-sm mx-auto sm:max-w-none sm:mx-0 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96 rounded-2xl border border-slate-800 bg-slate-900/95 shadow-2xl backdrop-blur-md overflow-hidden"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3 bg-slate-950/60">

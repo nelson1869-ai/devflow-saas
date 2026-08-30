@@ -154,7 +154,10 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-8">
           <div className="flex items-center gap-3 sm:gap-8">
             {/* Mobile Hamburger Navigation Drawer */}
-            <MobileNavDrawer />
+            <MobileNavDrawer
+              currentOrg={currentOrg}
+              currentUser={currentUser}
+            />
 
             <Link
               href="/devflow-saas"

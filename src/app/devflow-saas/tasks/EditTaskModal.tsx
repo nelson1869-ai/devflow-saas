@@ -12,6 +12,7 @@ import { SubtasksSection } from "./SubtasksSection";
 import { AttachmentsSection } from "./AttachmentsSection";
 import { PullRequestsSection } from "./PullRequestsSection";
 import { TimeTrackingSection } from "./TimeTrackingSection";
+import { AiTaskCopilotModal } from "../components/AiTaskCopilotModal";
 
 type EditTaskModalProps = Readonly<{
   task: Task;
@@ -64,6 +65,7 @@ export function EditTaskModal({
     task.estimatedHours || 0,
   );
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [selectedBlockerId, setSelectedBlockerId] = useState("");
   const [newComment, setNewComment] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -85,13 +87,13 @@ export function EditTaskModal({
   // Global Escape key handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
+      if (e.key === "Escape" && isOpen && !isAiModalOpen) {
         onClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, isAiModalOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -171,14 +173,27 @@ export function EditTaskModal({
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close dialog"
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            {/* AI Copilot Button */}
+            <button
+              type="button"
+              onClick={() => setIsAiModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-500/10 px-2.5 py-1 text-xs font-bold text-purple-300 hover:bg-purple-500/20 transition shadow-sm"
+              title="Enhance task with Gemini AI"
+            >
+              <span>✨</span>
+              <span>AI Copilot</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close dialog"
+              className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {errorMessage && (
@@ -219,13 +234,15 @@ export function EditTaskModal({
               >
                 Description (Markdown Supported)
               </label>
-              <button
-                type="button"
-                onClick={() => setIsPreviewMode((prev) => !prev)}
-                className="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 transition"
-              >
-                {isPreviewMode ? "✏️ Edit Markdown" : "👁️ Preview Markdown"}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewMode((prev) => !prev)}
+                  className="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 transition"
+                >
+                  {isPreviewMode ? "✏️ Edit Markdown" : "👁️ Preview Markdown"}
+                </button>
+              </div>
             </div>
 
             {isPreviewMode ? (
@@ -493,6 +510,7 @@ export function EditTaskModal({
             task={task}
             projectId={task.projectId}
             currentUser={currentUser}
+            onTaskCompleted={() => setStatus("Done")}
           />
         </div>
 
@@ -559,6 +577,28 @@ export function EditTaskModal({
             </div>
           </form>
         </div>
+
+        {/* AI Task Copilot Modal (Phase 85) */}
+        {isAiModalOpen && (
+          <AiTaskCopilotModal
+            taskTitle={title}
+            taskDescription={description}
+            taskTag={tag}
+            taskId={task.id}
+            projectId={task.projectId}
+            isOpen={isAiModalOpen}
+            onClose={() => setIsAiModalOpen(false)}
+            onApplyEnhancement={({
+              description: newDesc,
+              priority: newPriority,
+              estimatedHours: newHours,
+            }) => {
+              setDescription(newDesc);
+              setPriority(newPriority);
+              setEstimatedHours(newHours);
+            }}
+          />
+        )}
       </div>
     </div>
   );

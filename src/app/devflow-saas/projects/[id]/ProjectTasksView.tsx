@@ -16,6 +16,7 @@ import { TaskCard } from "../../tasks/TaskCard";
 import { EditTaskModal } from "../../tasks/EditTaskModal";
 import { TaskAuditDrawer } from "../../tasks/TaskAuditDrawer";
 import { BulkActionBar } from "../../tasks/BulkActionBar";
+import { AiTaskCopilotModal } from "../../components/AiTaskCopilotModal";
 import {
   createTaskAction,
   updateTaskAction,
@@ -158,7 +159,7 @@ export function ProjectTasksView({
   const [estimatedHours, setEstimatedHours] = useState("");
   const [assigneeName, setAssigneeName] = useState(currentUser.name);
   const [formError, setFormError] = useState<string | null>(null);
-
+  const [isCreateAiModalOpen, setIsCreateAiModalOpen] = useState(false);
   // React 19 Render-time state synchronizations (zero cascading renders)
   if (initialTasks !== prevInitialTasks) {
     setPrevInitialTasks(initialTasks);
@@ -1067,7 +1068,20 @@ export function ProjectTasksView({
           onSubmit={handleCreateTask}
           className="space-y-4 rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-6 shadow-sm ring-1 ring-cyan-500/20"
         >
-          <h3 className="text-sm font-semibold text-white">Create New Task</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white">
+              Create New Task
+            </h3>
+            <button
+              type="button"
+              onClick={() => setIsCreateAiModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-500/10 px-2.5 py-1 text-xs font-bold text-purple-300 hover:bg-purple-500/20 transition shadow-sm"
+              title="Enhance new task with Gemini AI"
+            >
+              <span>✨</span>
+              <span>AI Copilot</span>
+            </button>
+          </div>
 
           {formError && (
             <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300">
@@ -1522,6 +1536,26 @@ export function ProjectTasksView({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Create Task AI Copilot Modal (Phase 85) */}
+      {isCreateAiModalOpen && (
+        <AiTaskCopilotModal
+          taskTitle={title}
+          taskDescription={description}
+          taskTag={tag}
+          isOpen={isCreateAiModalOpen}
+          onClose={() => setIsCreateAiModalOpen(false)}
+          onApplyEnhancement={({
+            description: newDesc,
+            priority: newPriority,
+            estimatedHours: newHours,
+          }) => {
+            setDescription(newDesc);
+            setPriority(newPriority);
+            setEstimatedHours(String(newHours));
+          }}
+        />
       )}
     </section>
   );

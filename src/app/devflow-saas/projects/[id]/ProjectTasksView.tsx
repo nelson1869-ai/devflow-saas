@@ -18,7 +18,8 @@ type ProjectTasksViewProps = Readonly<{
 }>;
 
 type TaskFilter = "All" | TaskStatus;
-type ViewMode = "grid" | "kanban";
+type ViewMode = "kanban" | "grid";
+type PriorityFilter = "All" | TaskPriority;
 
 const taskFilterOptions: readonly TaskFilter[] = [
   "All",
@@ -26,6 +27,14 @@ const taskFilterOptions: readonly TaskFilter[] = [
   "In Progress",
   "Review",
   "Done",
+];
+
+const priorityOptions: readonly PriorityFilter[] = [
+  "All",
+  "Urgent",
+  "High",
+  "Medium",
+  "Low",
 ];
 
 const kanbanColumns: readonly {
@@ -58,12 +67,19 @@ export function ProjectTasksView({
   allUsers,
 }: ProjectTasksViewProps) {
   const [tasks, setTasks] = useState<readonly Task[]>(initialTasks);
-  const [selectedStatus, setSelectedStatus] = useState<TaskFilter>("All");
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Form State (Default assignee to current logged-in user)
+  // Filter States
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState<TaskFilter>("All");
+  const [selectedAssignee, setSelectedAssignee] = useState<string>("All");
+  const [selectedPriority, setSelectedPriority] =
+    useState<PriorityFilter>("All");
+  const [onlyMyTasks, setOnlyMyTasks] = useState(false);
+
+  // Form State
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("Todo");
@@ -161,12 +177,48 @@ export function ProjectTasksView({
     });
   };
 
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setSelectedStatus("All");
+    setSelectedAssignee("All");
+    setSelectedPriority("All");
+    setOnlyMyTasks(false);
+  };
+
+  const hasActiveFilters =
+    searchQuery.trim() !== "" ||
+    selectedStatus !== "All" ||
+    selectedAssignee !== "All" ||
+    selectedPriority !== "All" ||
+    onlyMyTasks;
+
+  // Compound Filter Predicate
   const filteredTasks = tasks.filter((task) => {
-    return selectedStatus === "All" || task.status === selectedStatus;
+    const matchesStatus =
+      viewMode === "kanban" ||
+      selectedStatus === "All" ||
+      task.status === selectedStatus;
+
+    const matchesAssignee = onlyMyTasks
+      ? task.assigneeName === currentUser.name
+      : selectedAssignee === "All" || task.assigneeName === selectedAssignee;
+
+    const matchesPriority =
+      selectedPriority === "All" || task.priority === selectedPriority;
+
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSearch =
+      query === "" ||
+      task.title.toLowerCase().includes(query) ||
+      task.description.toLowerCase().includes(query) ||
+      task.assigneeName.toLowerCase().includes(query);
+
+    return matchesStatus && matchesAssignee && matchesPriority && matchesSearch;
   });
 
   return (
     <section aria-labelledby="tasks-section-heading" className="space-y-6">
+      {/* Top Header Bar */}
       <div className="flex flex-col gap-4 border-b border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <h2
@@ -175,11 +227,13 @@ export function ProjectTasksView({
           >
             Project Tasks & Issues
           </h2>
-          <span className="text-xs text-slate-400">({tasks.length} total)</span>
+          <span className="text-xs text-slate-400">
+            ({filteredTasks.length} of {tasks.length} tasks)
+          </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* View Mode Toggle */}
+          {/* View Mode Switcher */}
           <div className="inline-flex rounded-lg border border-slate-800 bg-slate-900/60 p-0.5">
             <button
               type="button"
@@ -207,37 +261,6 @@ export function ProjectTasksView({
             </button>
           </div>
 
-          {/* Status Filter Tabs (Grid Mode) */}
-          {viewMode === "grid" && (
-            <div
-              role="tablist"
-              aria-label="Filter tasks by status"
-              className="flex flex-wrap gap-1.5"
-            >
-              {taskFilterOptions.map((opt) => {
-                const isSelected = selectedStatus === opt;
-                return (
-                  <button
-                    key={opt}
-                    type="button"
-                    role="tab"
-                    aria-selected={isSelected}
-                    onClick={() => setSelectedStatus(opt)}
-                    className={[
-                      "rounded-lg px-2.5 py-1 text-xs font-medium transition",
-                      "focus-visible:outline-2 focus-visible:outline-cyan-400",
-                      isSelected
-                        ? "bg-cyan-400 text-slate-950 shadow-sm"
-                        : "border border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700 hover:text-white",
-                    ].join(" ")}
-                  >
-                    {opt}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
           <button
             type="button"
             onClick={() => {
@@ -255,6 +278,109 @@ export function ProjectTasksView({
             {isFormOpen ? "Cancel" : "+ Add Task"}
           </button>
         </div>
+      </div>
+
+      {/* Advanced Filter Toolbar */}
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
+        {/* Search */}
+        <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
+          <input
+            type="search"
+            placeholder="Search tasks or assignees..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 transition hover:border-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+          />
+        </div>
+
+        {/* Quick "My Tasks" Toggle */}
+        <button
+          type="button"
+          onClick={() => setOnlyMyTasks((prev) => !prev)}
+          className={[
+            "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition",
+            onlyMyTasks
+              ? "border border-cyan-500/40 bg-cyan-500/10 text-cyan-300"
+              : "border border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700 hover:text-white",
+          ].join(" ")}
+        >
+          <span>👤</span>
+          <span>Only My Tasks</span>
+        </button>
+
+        {/* Assignee Filter (if not in My Tasks mode) */}
+        {!onlyMyTasks && (
+          <select
+            value={selectedAssignee}
+            onChange={(e) => setSelectedAssignee(e.target.value)}
+            aria-label="Filter by Assignee"
+            className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-300 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+          >
+            <option value="All">All Assignees</option>
+            {allUsers.map((u) => (
+              <option key={u.id} value={u.name}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* Priority Filter */}
+        <select
+          value={selectedPriority}
+          onChange={(e) =>
+            setSelectedPriority(e.target.value as PriorityFilter)
+          }
+          aria-label="Filter by Priority"
+          className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-300 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+        >
+          {priorityOptions.map((p) => (
+            <option key={p} value={p}>
+              {p === "All" ? "All Priorities" : `${p} Priority`}
+            </option>
+          ))}
+        </select>
+
+        {/* Grid Status Tabs (Only in Grid mode) */}
+        {viewMode === "grid" && (
+          <div
+            role="tablist"
+            aria-label="Filter tasks by status"
+            className="flex flex-wrap gap-1"
+          >
+            {taskFilterOptions.map((opt) => {
+              const isSelected = selectedStatus === opt;
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  onClick={() => setSelectedStatus(opt)}
+                  className={[
+                    "rounded-lg px-2 py-1 text-xs font-medium transition",
+                    isSelected
+                      ? "bg-cyan-400 text-slate-950"
+                      : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white",
+                  ].join(" ")}
+                >
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Clear Filters Button */}
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="ml-auto text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition"
+          >
+            Reset Filters
+          </button>
+        )}
       </div>
 
       {/* Task Creation Form */}
@@ -402,7 +528,9 @@ export function ProjectTasksView({
       {viewMode === "kanban" ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {kanbanColumns.map((col) => {
-            const columnTasks = tasks.filter((t) => t.status === col.status);
+            const columnTasks = filteredTasks.filter(
+              (t) => t.status === col.status,
+            );
             return (
               <div
                 key={col.status}
@@ -447,8 +575,17 @@ export function ProjectTasksView({
       filteredTasks.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-800 p-10 text-center">
           <p className="text-sm text-slate-400">
-            No tasks found with status &ldquo;{selectedStatus}&rdquo;.
+            No tasks found matching your filter criteria.
           </p>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="mt-3 inline-flex items-center text-xs font-semibold text-cyan-400 hover:text-cyan-300"
+            >
+              Clear all filters
+            </button>
+          )}
         </div>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

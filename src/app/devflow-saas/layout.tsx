@@ -151,7 +151,7 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
 
       {/* SaaS App Header */}
       <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-8">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-3 sm:px-8">
           <div className="flex items-center gap-3 sm:gap-8">
             {/* Mobile Hamburger Navigation Drawer */}
             <MobileNavDrawer

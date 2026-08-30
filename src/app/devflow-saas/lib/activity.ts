@@ -8,7 +8,9 @@ export type ActivityAction =
   | "created_task"
   | "updated_task"
   | "updated_task_status"
-  | "deleted_task";
+  | "deleted_task"
+  | "updated_user"
+  | "invited_user";
 
 export type ActivityItem = Readonly<{
   id: string;
@@ -59,7 +61,7 @@ export function getActivitiesByOrgId(
 
 export function logActivity(
   orgId: string,
-  projectId: string | undefined,
+  projectId: string | null | undefined,
   userName: string,
   action: ActivityAction,
   entityTitle: string,

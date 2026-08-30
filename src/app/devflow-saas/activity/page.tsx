@@ -40,6 +40,16 @@ const actionConfig: Readonly<
     label: "Task Removed",
     badge: "border-slate-700 bg-slate-800 text-slate-400",
   },
+  updated_user: {
+    icon: "👤",
+    label: "Role Updated",
+    badge: "border-purple-500/30 bg-purple-500/10 text-purple-400",
+  },
+  invited_user: {
+    icon: "🎉",
+    label: "Member Invited",
+    badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+  },
 };
 
 export default async function ActivityPage() {
@@ -69,71 +79,71 @@ export default async function ActivityPage() {
           </span>
         </header>
 
-        {/* Timeline List */}
+        {/* Activity Feed */}
         {activities.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-800 p-12 text-center">
             <p className="text-sm text-slate-400">
-              No activity recorded in this workspace yet.
+              No activity recorded for this workspace yet.
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Create a project or task to begin populating the audit log.
             </p>
           </div>
         ) : (
-          <div className="relative border-l border-slate-800 pl-6 sm:pl-8 space-y-6">
-            {activities.map((act) => {
-              const meta = actionConfig[act.action] || {
+          <div className="relative border-l border-slate-800/80 ml-4 space-y-6">
+            {activities.map((item) => {
+              const cfg = actionConfig[item.action] || {
                 icon: "📌",
-                label: act.action,
+                label: "Activity",
                 badge: "border-slate-700 bg-slate-800 text-slate-300",
               };
 
               return (
-                <div key={act.id} className="relative group">
-                  {/* Timeline Dot Icon */}
+                <div key={item.id} className="relative pl-6">
+                  {/* Timeline Dot */}
                   <span
                     aria-hidden="true"
-                    className="absolute -left-35px sm:-left-43px top-1 flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-xs shadow-md"
+                    className="absolute -left-2.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-slate-800 bg-slate-900 text-xs shadow-sm"
                   >
-                    {meta.icon}
+                    {cfg.icon}
                   </span>
 
-                  {/* Activity Card */}
-                  <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 p-4 transition hover:border-slate-700">
+                  {/* Card Content */}
+                  <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-4 shadow-sm transition hover:border-slate-700">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white">
-                          {act.userName}
-                        </span>
                         <span
-                          className={[
-                            "rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-                            meta.badge,
-                          ].join(" ")}
+                          className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${cfg.badge}`}
                         >
-                          {meta.label}
+                          {cfg.label}
+                        </span>
+                        <span className="text-xs font-semibold text-white">
+                          {item.userName}
                         </span>
                       </div>
 
-                      <time className="text-[11px] text-slate-500">
-                        {act.createdAt}
+                      <time className="text-xs text-slate-500">
+                        {item.createdAt}
                       </time>
                     </div>
 
-                    <p className="mt-2 text-xs font-medium text-slate-200">
-                      {act.entityTitle}
+                    <p className="mt-2 text-sm font-medium text-slate-200">
+                      {item.entityTitle}
                     </p>
 
-                    {act.details && (
+                    {item.details && (
                       <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                        {act.details}
+                        {item.details}
                       </p>
                     )}
 
-                    {act.projectId && (
+                    {item.projectId && (
                       <div className="mt-3">
                         <Link
-                          href={`/devflow-saas/projects/${act.projectId}`}
-                          className="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300"
+                          href={`/devflow-saas/projects/${item.projectId}`}
+                          className="inline-flex items-center text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition"
                         >
-                          View Project &rarr;
+                          View Project →
                         </Link>
                       </div>
                     )}

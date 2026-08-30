@@ -3,12 +3,18 @@
 import { useState } from "react";
 import type { Task, TaskPriority, TaskStatus, TaskTag } from "./types";
 import { getDueDateMeta } from "../lib/dates";
+import {
+  MarkdownView,
+  getChecklistStats,
+  toggleChecklistInMarkdown,
+} from "../components/MarkdownView";
 
 type TaskCardProps = Readonly<{
   task: Task;
   onStatusChange?: (taskId: string, newStatus: TaskStatus) => void;
   onEdit?: (task: Task) => void;
   onDelete?: (taskId: string) => void;
+  onUpdateDescription?: (taskId: string, newDescription: string) => void;
   isDraggable?: boolean;
 }>;
 
@@ -40,10 +46,12 @@ export function TaskCard({
   onStatusChange,
   onEdit,
   onDelete,
+  onUpdateDescription,
   isDraggable = true,
 }: TaskCardProps) {
   const [isDragging, setIsDragging] = useState(false);
   const dueMeta = getDueDateMeta(task.dueDate, task.status === "Done");
+  const stats = getChecklistStats(task.description);
 
   const handleDragStart = (e: React.DragEvent<HTMLLIElement>) => {
     e.dataTransfer.setData("text/plain", task.id);
@@ -53,6 +61,16 @@ export function TaskCard({
 
   const handleDragEnd = () => {
     setIsDragging(false);
+  };
+
+  const handleToggleChecklist = (lineIndex: number, checked: boolean) => {
+    if (!onUpdateDescription) return;
+    const updated = toggleChecklistInMarkdown(
+      task.description,
+      lineIndex,
+      checked,
+    );
+    onUpdateDescription(task.id, updated);
   };
 
   return (
@@ -193,9 +211,42 @@ export function TaskCard({
 
       <h3 className="mt-2.5 text-sm font-semibold text-white">{task.title}</h3>
 
-      <p className="mt-1 text-xs leading-5 text-slate-300">
-        {task.description}
-      </p>
+      {/* Formatted Markdown Description */}
+      <div className="mt-2">
+        <MarkdownView
+          content={task.description}
+          interactive={true}
+          onToggleChecklist={handleToggleChecklist}
+        />
+      </div>
+
+      {/* Checklist Progress Meter */}
+      {stats.total > 0 && (
+        <div className="mt-3 rounded-lg border border-slate-800/80 bg-slate-950/60 p-2">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-slate-400 font-mono">
+              ☑️ {stats.completed}/{stats.total} criteria
+            </span>
+            <span
+              className={
+                stats.percentage === 100
+                  ? "font-bold text-emerald-400"
+                  : "font-semibold text-cyan-400"
+              }
+            >
+              {stats.percentage}%
+            </span>
+          </div>
+          <div className="mt-1.5 h-1 w-full rounded-full bg-slate-800 overflow-hidden">
+            <div
+              className={`h-1 rounded-full transition-all duration-300 ${
+                stats.percentage === 100 ? "bg-emerald-400" : "bg-cyan-400"
+              }`}
+              style={{ width: `${stats.percentage}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Footer: Assignee & Due Date */}
       <div className="mt-3.5 flex items-center justify-between border-t border-slate-800/80 pt-2.5 text-xs text-slate-400">

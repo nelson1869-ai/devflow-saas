@@ -224,6 +224,15 @@ export function ProjectTasksView({
     });
   };
 
+  const handleUpdateDescriptionDirectly = (
+    taskId: string,
+    newDescription: string,
+  ) => {
+    const target = tasks.find((t) => t.id === taskId);
+    if (!target) return;
+    handleSaveTask({ ...target, description: newDescription });
+  };
+
   const handleAddComment = (content: string) => {
     if (!editingTask) return;
 
@@ -592,17 +601,17 @@ export function ProjectTasksView({
                 htmlFor="task-description"
                 className="block text-xs font-medium text-slate-300"
               >
-                Description
+                Description (Markdown & Checklists supported)
               </label>
               <textarea
                 id="task-description"
-                rows={2}
+                rows={3}
                 required
                 disabled={isPending}
-                placeholder="Detailed acceptance criteria..."
+                placeholder="- [ ] Acceptance criterion 1&#10;- [ ] Acceptance criterion 2"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
+                className="mt-1 w-full font-mono rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
               />
             </div>
 
@@ -807,6 +816,7 @@ export function ProjectTasksView({
                           onStatusChange={handleStatusChange}
                           onEdit={(t) => setEditingTask(t)}
                           onDelete={handleDeleteTask}
+                          onUpdateDescription={handleUpdateDescriptionDirectly}
                           isDraggable={true}
                         />
                       ))}
@@ -842,13 +852,14 @@ export function ProjectTasksView({
               onStatusChange={handleStatusChange}
               onEdit={(t) => setEditingTask(t)}
               onDelete={handleDeleteTask}
+              onUpdateDescription={handleUpdateDescriptionDirectly}
               isDraggable={false}
             />
           ))}
         </ul>
       )}
 
-      {/* Edit Task Modal with Due Date and Discussion */}
+      {/* Edit Task Modal with Due Date, Markdown Tabs and Discussion */}
       {editingTask && (
         <EditTaskModal
           key={editingTask.id}

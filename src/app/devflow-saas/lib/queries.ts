@@ -9,6 +9,7 @@ import type {
   TaskDependency,
   TimeLog,
   Subtask,
+  TaskAttachment,
 } from "../tasks/types";
 import type { WorkspaceTag, TagColor } from "./tags";
 
@@ -63,6 +64,18 @@ type SubtaskRow = {
   is_completed: number;
   assignee_name: string | null;
   position: number;
+  created_at: string;
+};
+
+type AttachmentRow = {
+  id: string;
+  task_id: string;
+  user_id: string;
+  user_name: string;
+  file_name: string;
+  file_type: string;
+  file_size_bytes: number;
+  file_url: string;
   created_at: string;
 };
 
@@ -226,6 +239,33 @@ export function getTasksByProjectId(projectId: string): readonly Task[] {
     subtaskMap.set(s.task_id, list);
   }
 
+  // Fetch all attachments for tasks in this project
+  const attachStmt = db.prepare(`
+    SELECT id, task_id, user_id, user_name, file_name, file_type, file_size_bytes, file_url, created_at
+    FROM devflow_attachments
+    WHERE task_id IN (SELECT id FROM devflow_tasks WHERE project_id = ?)
+    ORDER BY created_at DESC
+  `);
+
+  const attachRows = attachStmt.all(projectId) as AttachmentRow[];
+  const attachMap = new Map<string, TaskAttachment[]>();
+
+  for (const a of attachRows) {
+    const list = attachMap.get(a.task_id) || [];
+    list.push({
+      id: a.id,
+      taskId: a.task_id,
+      userId: a.user_id,
+      userName: a.user_name,
+      fileName: a.file_name,
+      fileType: a.file_type,
+      fileSizeBytes: a.file_size_bytes,
+      fileUrl: a.file_url,
+      createdAt: a.created_at,
+    });
+    attachMap.set(a.task_id, list);
+  }
+
   return rows.map((row) => {
     const logs = timeMap.get(row.id) || [];
     const loggedHours = logs.reduce((sum, l) => sum + l.hours, 0);
@@ -245,6 +285,7 @@ export function getTasksByProjectId(projectId: string): readonly Task[] {
       loggedHours: Number(loggedHours.toFixed(1)),
       timeLogs: logs,
       subtasks: subtaskMap.get(row.id) || [],
+      attachments: attachMap.get(row.id) || [],
     };
   });
 }

@@ -32,6 +32,18 @@ export type Subtask = Readonly<{
   createdAt: string;
 }>;
 
+export type TaskAttachment = Readonly<{
+  id: string;
+  taskId: string;
+  userId: string;
+  userName: string;
+  fileName: string;
+  fileType: string;
+  fileSizeBytes: number;
+  fileUrl: string;
+  createdAt: string;
+}>;
+
 export type Task = Readonly<{
   id: string;
   projectId: string;
@@ -47,4 +59,5 @@ export type Task = Readonly<{
   loggedHours?: number;
   timeLogs?: readonly TimeLog[];
   subtasks?: readonly Subtask[];
+  attachments?: readonly TaskAttachment[];
 }>;

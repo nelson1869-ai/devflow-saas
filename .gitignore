@@ -48,3 +48,7 @@ next-env.d.ts
 
 # Separate learning curriculum
 /src/app/learn/**
+
+# Uploaded attachments (ignored from git)
+/public/uploads/*
+!/public/uploads/.gitkeep

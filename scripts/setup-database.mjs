@@ -264,6 +264,23 @@ db.exec(`
   );
 `);
 
+// 18. Task File Attachments (Phase 72)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS devflow_attachments (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    user_name TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    file_type TEXT NOT NULL,
+    file_size_bytes INTEGER NOT NULL,
+    file_url TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (task_id) REFERENCES devflow_tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE
+  );
+`);
+
 // Seed Initial Data
 const orgCount = db
   .prepare("SELECT count(*) as count FROM devflow_organizations")
@@ -425,57 +442,6 @@ if (projectCount === 0) {
     "Write integration tests for token refresh",
     0,
     3,
-  );
-}
-
-// Seed Starter Automation Rules (Phase 71)
-const autoCount = db
-  .prepare("SELECT count(*) as count FROM devflow_automations")
-  .get().count;
-if (autoCount === 0) {
-  console.log("Seeding Starter Workflow Automation Rules...");
-  const insertAuto = db.prepare(`
-    INSERT INTO devflow_automations (id, org_id, project_id, name, description, trigger_event, condition_json, action_type, action_payload_json, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-  `);
-
-  insertAuto.run(
-    "auto-1",
-    "org-1",
-    null,
-    "Auto-Move to Review on All Subtasks Completed",
-    "When all subtasks of an active task are checked off, automatically transition stage to Review and post a QA bot note.",
-    "all_subtasks_completed",
-    "{}",
-    "change_status",
-    JSON.stringify({ status: "Review", postComment: true }),
-  );
-
-  insertAuto.run(
-    "auto-2",
-    "org-1",
-    null,
-    "Auto-Escalate Urgent Issues to Admin",
-    "When a task priority is changed to Urgent, reassign to workspace Admin and tag as #bug.",
-    "task_priority_urgent",
-    "{}",
-    "reassign_user",
-    JSON.stringify({ assigneeName: "Alex Rivera", addTag: "bug" }),
-  );
-
-  insertAuto.run(
-    "auto-3",
-    "org-1",
-    null,
-    "Alert on Time Budget Overrun",
-    "When work logged exceeds the initial estimate, post an automated budget variance warning note.",
-    "time_over_budget",
-    "{}",
-    "post_comment",
-    JSON.stringify({
-      content:
-        "⚠️ Automation Bot: This task has exceeded its estimated work budget.",
-    }),
   );
 }
 

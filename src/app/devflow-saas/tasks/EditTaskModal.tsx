@@ -8,8 +8,9 @@ import type { WorkspaceTag } from "../lib/tags";
 import { MarkdownView } from "../components/MarkdownView";
 import { MentionAutocompleteInput } from "../components/MentionAutocompleteInput";
 import { MentionText } from "../components/MentionText";
-import { TimeTrackingSection } from "./TimeTrackingSection";
 import { SubtasksSection } from "./SubtasksSection";
+import { AttachmentsSection } from "./AttachmentsSection";
+import { TimeTrackingSection } from "./TimeTrackingSection";
 
 type EditTaskModalProps = Readonly<{
   task: Task;
@@ -473,6 +474,15 @@ export function EditTaskModal({
             task={task}
             projectId={task.projectId}
             allUsers={allUsers}
+          />
+        </div>
+
+        {/* File Attachments & Artifact Previews (Phase 72) */}
+        <div className="border-t border-slate-800 pt-6">
+          <AttachmentsSection
+            task={task}
+            projectId={task.projectId}
+            currentUser={currentUser}
           />
         </div>
 

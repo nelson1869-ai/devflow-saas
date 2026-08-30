@@ -221,6 +221,20 @@ try {
       executed_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (automation_id) REFERENCES devflow_automations(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS devflow_attachments (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      user_name TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      file_type TEXT NOT NULL,
+      file_size_bytes INTEGER NOT NULL,
+      file_url TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (task_id) REFERENCES devflow_tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE
+    );
   `);
 
   // Runtime self-healing column migrations

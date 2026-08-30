@@ -41,6 +41,8 @@ export function TaskCard({
   const subtasks = task.subtasks || [];
   const completedCount = subtasks.filter((s) => s.isCompleted).length;
 
+  const attachments = task.attachments || [];
+
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData("text/plain", task.id);
   };
@@ -168,12 +170,22 @@ export function TaskCard({
         )}
       </div>
 
-      {/* Footer: Due Date, Assignee, Actions */}
+      {/* Footer: Due Date, Assignee, Attachment Counter, Actions */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-900 pt-3 text-xs">
         <div className="flex flex-col gap-0.5">
-          <span className="text-[11px] font-medium text-slate-300">
-            👤 {task.assigneeName}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-medium text-slate-300">
+              👤 {task.assigneeName}
+            </span>
+            {attachments.length > 0 && (
+              <span
+                title={`${attachments.length} attached file(s)`}
+                className="rounded bg-slate-900 px-1.5 py-0.2 text-[10px] font-mono text-cyan-300 border border-slate-800"
+              >
+                📎 {attachments.length}
+              </span>
+            )}
+          </div>
           {task.dueDate && (
             <time className={`text-[10px] ${dueMeta.badgeStyle}`}>
               {dueMeta.label}
@@ -197,7 +209,7 @@ export function TaskCard({
           <button
             type="button"
             onClick={() => onEdit(task)}
-            title="Edit task & track subtasks"
+            title="Edit task & attachments"
             className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
           >
             ✏️

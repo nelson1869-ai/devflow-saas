@@ -11,11 +11,23 @@ export type ActionResponse = Readonly<{
   error?: string;
 }>;
 
-const SESSION_COOKIE_NAME = "devflow_session_user_id";
+const USER_SESSION_COOKIE_NAME = "devflow_session_user_id";
+const ORG_SESSION_COOKIE_NAME = "devflow_session_org_id";
 
 export async function switchActiveUserAction(userId: string): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, userId, {
+  cookieStore.set(USER_SESSION_COOKIE_NAME, userId, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+  });
+
+  revalidatePath("/devflow-saas", "layout");
+}
+
+export async function switchActiveOrgAction(orgId: string): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(ORG_SESSION_COOKIE_NAME, orgId, {
     path: "/",
     httpOnly: true,
     sameSite: "lax",
@@ -27,6 +39,12 @@ export async function switchActiveUserAction(userId: string): Promise<void> {
 export async function createProjectAction(
   formData: FormData,
 ): Promise<ActionResponse> {
+  const cookieStore = await cookies();
+  const orgId =
+    (formData.get("orgId") as string | null)?.trim() ||
+    cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value ||
+    "org-1";
+
   const name = (formData.get("name") as string | null)?.trim();
   const key = (formData.get("key") as string | null)?.trim().toUpperCase();
   const description = (formData.get("description") as string | null)?.trim();
@@ -43,11 +61,11 @@ export async function createProjectAction(
   try {
     const id = `proj-${Date.now()}`;
     const stmt = db.prepare(`
-      INSERT INTO devflow_projects (id, name, key, description, status)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO devflow_projects (id, org_id, name, key, description, status)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(id, name, key, description, status);
+    stmt.run(id, orgId, name, key, description, status);
 
     revalidatePath("/devflow-saas/projects");
     return { success: true };

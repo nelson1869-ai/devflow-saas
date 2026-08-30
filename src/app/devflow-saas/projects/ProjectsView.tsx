@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import type { Project, ProjectStatus, FilterOption } from "./types";
-import type { User } from "../lib/auth";
+import type { User, Organization } from "../lib/auth";
 import { ProjectCard } from "./ProjectCard";
 import { ProjectMetrics } from "./ProjectMetrics";
 import { createProjectAction, deleteProjectAction } from "../lib/actions";
@@ -10,6 +10,7 @@ import { createProjectAction, deleteProjectAction } from "../lib/actions";
 type ProjectsViewProps = Readonly<{
   initialProjects: readonly Project[];
   currentUser: User;
+  currentOrg: Organization;
 }>;
 
 const filterOptions: readonly FilterOption[] = [
@@ -22,6 +23,7 @@ const filterOptions: readonly FilterOption[] = [
 export function ProjectsView({
   initialProjects,
   currentUser,
+  currentOrg,
 }: ProjectsViewProps) {
   const [projects, setProjects] = useState<readonly Project[]>(initialProjects);
   const [selectedFilter, setSelectedFilter] = useState<FilterOption>("All");
@@ -36,12 +38,8 @@ export function ProjectsView({
   const [status, setStatus] = useState<ProjectStatus>("Active");
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Sync state when server revalidates data
-  if (
-    initialProjects !== projects &&
-    !isPending &&
-    initialProjects.length > projects.length
-  ) {
+  // Sync state when server revalidates data (or workspace switches)
+  if (initialProjects !== projects && !isPending) {
     setProjects(initialProjects);
   }
 
@@ -64,6 +62,7 @@ export function ProjectsView({
     }
 
     const formData = new FormData();
+    formData.append("orgId", currentOrg.id);
     formData.append("name", trimmedName);
     formData.append("key", trimmedKey);
     formData.append("description", trimmedDescription);
@@ -141,8 +140,11 @@ export function ProjectsView({
               Projects
             </h1>
             <p className="text-sm text-slate-400">
-              Manage your engineering projects, milestones, and task
-              deliverables.
+              Manage engineering projects and task deliverables for{" "}
+              <span className="font-medium text-cyan-300">
+                {currentOrg.name}
+              </span>
+              .
             </p>
           </div>
 
@@ -171,7 +173,7 @@ export function ProjectsView({
               id="create-project-heading"
               className="text-base font-semibold text-white"
             >
-              Create New Project
+              Create New Project in {currentOrg.name}
             </h2>
 
             {formError && (
@@ -353,7 +355,7 @@ export function ProjectsView({
           {filteredProjects.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-800 p-12 text-center">
               <p className="text-sm font-medium text-slate-300">
-                No projects found matching your search and filter criteria.
+                No projects found in {currentOrg.name} matching your criteria.
               </p>
               {(selectedFilter !== "All" || searchQuery.trim() !== "") && (
                 <button

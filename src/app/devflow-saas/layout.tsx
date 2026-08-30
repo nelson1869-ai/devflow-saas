@@ -1,17 +1,25 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { getCurrentUser, getAllUsers } from "./lib/auth";
+import {
+  getCurrentUser,
+  getAllUsers,
+  getCurrentOrg,
+  getAllOrgs,
+} from "./lib/auth";
 import { UserMenu } from "./components/UserMenu";
+import { WorkspaceMenu } from "./components/WorkspaceMenu";
 
 type DevFlowLayoutProps = Readonly<{
   children: ReactNode;
 }>;
 
 export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
-  // Server-side session resolution
-  const [currentUser, allUsers] = await Promise.all([
+  // Server-side session resolution for both User and Organization
+  const [currentUser, allUsers, currentOrg, allOrgs] = await Promise.all([
     getCurrentUser(),
     getAllUsers(),
+    getCurrentOrg(),
+    getAllOrgs(),
   ]);
 
   return (
@@ -50,9 +58,8 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
           </div>
 
           <div className="flex items-center gap-4">
-            <span className="hidden md:inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-0.5 text-xs font-medium text-cyan-300">
-              Workspace: Acme Engineering
-            </span>
+            {/* Multi-Tenant Workspace Switcher */}
+            <WorkspaceMenu currentOrg={currentOrg} allOrgs={allOrgs} />
 
             {/* Active User Session Menu */}
             <UserMenu currentUser={currentUser} allUsers={allUsers} />

@@ -1,12 +1,21 @@
-import { getAllProjects } from "../lib/queries";
-import { getCurrentUser } from "../lib/auth";
+import { getProjectsByOrgId } from "../lib/queries";
+import { getCurrentUser, getCurrentOrg } from "../lib/auth";
 import { ProjectsView } from "./ProjectsView";
 
 export default async function ProjectsPage() {
-  const [projects, currentUser] = await Promise.all([
-    getAllProjects(),
+  const [currentUser, currentOrg] = await Promise.all([
     getCurrentUser(),
+    getCurrentOrg(),
   ]);
 
-  return <ProjectsView initialProjects={projects} currentUser={currentUser} />;
+  // Isolate projects strictly by the active organization
+  const projects = getProjectsByOrgId(currentOrg.id);
+
+  return (
+    <ProjectsView
+      initialProjects={projects}
+      currentUser={currentUser}
+      currentOrg={currentOrg}
+    />
+  );
 }

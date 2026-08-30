@@ -21,6 +21,7 @@ export function EditTaskModal({
   onSave,
   isPending = false,
 }: EditTaskModalProps) {
+  // State initialized directly from props (Zero cascading renders)
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [status, setStatus] = useState<TaskStatus>(task.status);
@@ -28,17 +29,7 @@ export function EditTaskModal({
   const [assigneeName, setAssigneeName] = useState(task.assigneeName);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync state whenever task prop changes
-  useEffect(() => {
-    setTitle(task.title);
-    setDescription(task.description);
-    setStatus(task.status);
-    setPriority(task.priority);
-    setAssigneeName(task.assigneeName);
-    setError(null);
-  }, [task]);
-
-  // Escape key handler
+  // Escape key keyboard listener
   useEffect(() => {
     if (!isOpen) return;
 

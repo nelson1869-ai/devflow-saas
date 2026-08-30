@@ -97,6 +97,75 @@ export async function createProjectAction(
   }
 }
 
+export async function updateProjectAction(
+  formData: FormData,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  const projectId = (formData.get("projectId") as string | null)?.trim();
+  const name = (formData.get("name") as string | null)?.trim();
+  const key = (formData.get("key") as string | null)?.trim().toUpperCase();
+  const description = (formData.get("description") as string | null)?.trim();
+  const status = (formData.get("status") as ProjectStatus | null) || "Active";
+
+  if (!projectId || !name || !key || !description) {
+    return { success: false, error: "All fields are required." };
+  }
+
+  if (key.length < 2 || key.length > 6) {
+    return { success: false, error: "Project key must be 2 to 6 characters." };
+  }
+
+  try {
+    const keyCheckStmt = db.prepare(
+      "SELECT id FROM devflow_projects WHERE key = ? AND id != ?",
+    );
+    const existing = keyCheckStmt.get(key, projectId);
+    if (existing) {
+      return {
+        success: false,
+        error: `Project key "${key}" is already taken by another project.`,
+      };
+    }
+
+    const stmt = db.prepare(`
+      UPDATE devflow_projects
+      SET name = ?, key = ?, description = ?, status = ?
+      WHERE id = ?
+    `);
+
+    stmt.run(name, key, description, status, projectId);
+
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    if (project) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "updated_project",
+        name,
+        `Project settings updated (Key: ${key}, Status: ${status}).`,
+      );
+    }
+
+    revalidatePath("/devflow-saas/projects");
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
+    return { success: true };
+  } catch {
+    return {
+      success: false,
+      error: "Failed to update project settings in database.",
+    };
+  }
+}
+
 export async function deleteProjectAction(
   projectId: string,
 ): Promise<ActionResponse> {
@@ -376,6 +445,7 @@ export async function createCommentAction(
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
     revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to save comment to database." };

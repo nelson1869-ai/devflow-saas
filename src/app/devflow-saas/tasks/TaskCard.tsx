@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { Task, TaskPriority, TaskStatus } from "./types";
 
 type TaskCardProps = Readonly<{
@@ -5,6 +8,7 @@ type TaskCardProps = Readonly<{
   onStatusChange?: (taskId: string, newStatus: TaskStatus) => void;
   onEdit?: (task: Task) => void;
   onDelete?: (taskId: string) => void;
+  isDraggable?: boolean;
 }>;
 
 const priorityStyles: Readonly<Record<TaskPriority, string>> = {
@@ -26,51 +30,90 @@ export function TaskCard({
   onStatusChange,
   onEdit,
   onDelete,
+  isDraggable = true,
 }: TaskCardProps) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragStart = (e: React.DragEvent<HTMLLIElement>) => {
+    e.dataTransfer.setData("text/plain", task.id);
+    e.dataTransfer.effectAllowed = "move";
+    setIsDragging(true);
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
   return (
-    <li className="group relative rounded-xl border border-slate-800/90 bg-slate-900/70 p-4 transition hover:border-slate-700 shadow-sm">
+    <li
+      draggable={isDraggable}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      className={[
+        "group relative rounded-xl border border-slate-800/90 bg-slate-900/70 p-4 transition-all duration-150 shadow-sm select-none",
+        isDraggable
+          ? "cursor-grab active:cursor-grabbing hover:border-slate-700 hover:shadow-md"
+          : "",
+        isDragging
+          ? "opacity-40 scale-95 border-cyan-500/50 bg-slate-800/50"
+          : "opacity-100 scale-100",
+      ].join(" ")}
+    >
       <div className="flex items-center justify-between gap-2">
-        {/* Status Dropdown */}
-        {onStatusChange ? (
-          <label className="relative inline-flex items-center">
-            <span className="sr-only">Change status for {task.title}</span>
-            <select
-              value={task.status}
-              onChange={(e) =>
-                onStatusChange(task.id, e.target.value as TaskStatus)
-              }
+        <div className="flex items-center gap-2">
+          {/* Drag Handle Dots */}
+          {isDraggable && (
+            <span
+              aria-hidden="true"
+              className="text-slate-600 group-hover:text-slate-400 text-xs font-mono select-none"
+              title="Drag to change column"
+            >
+              ⋮⋮
+            </span>
+          )}
+
+          {/* Status Dropdown */}
+          {onStatusChange ? (
+            <label className="relative inline-flex items-center">
+              <span className="sr-only">Change status for {task.title}</span>
+              <select
+                value={task.status}
+                onChange={(e) =>
+                  onStatusChange(task.id, e.target.value as TaskStatus)
+                }
+                className={[
+                  "rounded-md border px-2 py-0.5 text-xs font-medium cursor-pointer transition focus:outline-none focus:ring-1 focus:ring-cyan-400",
+                  statusStyles[task.status],
+                ].join(" ")}
+              >
+                <option value="Todo" className="bg-slate-900 text-slate-200">
+                  Todo
+                </option>
+                <option
+                  value="In Progress"
+                  className="bg-slate-900 text-slate-200"
+                >
+                  In Progress
+                </option>
+                <option value="Review" className="bg-slate-900 text-slate-200">
+                  Review
+                </option>
+                <option value="Done" className="bg-slate-900 text-slate-200">
+                  Done
+                </option>
+              </select>
+            </label>
+          ) : (
+            <span
               className={[
-                "rounded-md border px-2 py-0.5 text-xs font-medium cursor-pointer transition focus:outline-none focus:ring-1 focus:ring-cyan-400",
+                "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
                 statusStyles[task.status],
               ].join(" ")}
             >
-              <option value="Todo" className="bg-slate-900 text-slate-200">
-                Todo
-              </option>
-              <option
-                value="In Progress"
-                className="bg-slate-900 text-slate-200"
-              >
-                In Progress
-              </option>
-              <option value="Review" className="bg-slate-900 text-slate-200">
-                Review
-              </option>
-              <option value="Done" className="bg-slate-900 text-slate-200">
-                Done
-              </option>
-            </select>
-          </label>
-        ) : (
-          <span
-            className={[
-              "inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium",
-              statusStyles[task.status],
-            ].join(" ")}
-          >
-            {task.status}
-          </span>
-        )}
+              {task.status}
+            </span>
+          )}
+        </div>
 
         <div className="flex items-center gap-1.5">
           <span

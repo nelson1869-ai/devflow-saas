@@ -23,6 +23,13 @@ database.exec(`
     price INTEGER NOT NULL CHECK (price >= 0)
   );
 
+  CREATE TABLE IF NOT EXISTS devflow_organizations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS devflow_users (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -34,11 +41,13 @@ database.exec(`
 
   CREATE TABLE IF NOT EXISTS devflow_projects (
     id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL DEFAULT 'org-1',
     name TEXT NOT NULL,
     key TEXT NOT NULL UNIQUE,
     description TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'Active',
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE
   );
 
   CREATE TABLE IF NOT EXISTS devflow_tasks (
@@ -52,24 +61,55 @@ database.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
   );
+`);
 
+// Migration: ensure org_id column exists on existing devflow_projects table
+try {
+  database.exec(
+    "ALTER TABLE devflow_projects ADD COLUMN org_id TEXT NOT NULL DEFAULT 'org-1'",
+  );
+} catch {
+  // Column already exists
+}
+
+database.exec(`
+  -- Seed Organizations
+  INSERT OR IGNORE INTO devflow_organizations (id, name, slug) VALUES
+    ('org-1', 'Acme Engineering', 'acme'),
+    ('org-2', 'Stark Industries', 'stark');
+
+  -- Seed Users
   INSERT OR IGNORE INTO devflow_users (id, name, email, role, avatar_url) VALUES
     ('user-1', 'Nelson Rivera', 'nelson@devflow.io', 'Admin', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'),
     ('user-2', 'Sarah Connor', 'sarah@devflow.io', 'Member', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80'),
     ('user-3', 'Devin Zhao', 'devin@devflow.io', 'Member', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80');
 
-  INSERT OR IGNORE INTO devflow_projects (id, name, key, description, status) VALUES
-    ('proj-1', 'Platform Core APIs', 'CORE', 'Core authentication, multi-tenant isolation, and rate limiting services.', 'Active'),
-    ('proj-2', 'Customer Dashboard v2', 'DASH', 'Real-time analytics and workflow telemetry dashboard for engineering teams.', 'Planning'),
-    ('proj-3', 'CLI Tooling & SDKs', 'CLI', 'Developer command-line interface and client libraries for DevFlow APIs.', 'Completed');
+  -- Seed Projects (Acme Engineering: org-1)
+  INSERT OR IGNORE INTO devflow_projects (id, org_id, name, key, description, status) VALUES
+    ('proj-1', 'org-1', 'Platform Core APIs', 'CORE', 'Core authentication, multi-tenant isolation, and rate limiting services.', 'Active'),
+    ('proj-2', 'org-1', 'Customer Dashboard v2', 'DASH', 'Real-time analytics and workflow telemetry dashboard for engineering teams.', 'Planning'),
+    ('proj-3', 'org-1', 'CLI Tooling & SDKs', 'CLI', 'Developer command-line interface and client libraries for DevFlow APIs.', 'Completed');
 
+  -- Seed Projects (Stark Industries: org-2)
+  INSERT OR IGNORE INTO devflow_projects (id, org_id, name, key, description, status) VALUES
+    ('proj-4', 'org-2', 'Arc Reactor Grid Management', 'ARC', 'Clean energy distribution telemetry and decentralized load balancing.', 'Active'),
+    ('proj-5', 'org-2', 'Jarvis Neural Assistant v4', 'JARV', 'Edge inference neural network pipeline for autonomous diagnostics.', 'Planning');
+
+  -- Seed Tasks (Acme Engineering)
   INSERT OR IGNORE INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name) VALUES
     ('task-101', 'proj-1', 'Implement JWT Session Verification', 'Validate session cookies and decode tenant claims in middleware.', 'In Progress', 'High', 'Nelson Rivera'),
     ('task-102', 'proj-1', 'Configure Redis Rate Limiter', 'Apply 100 req/min bucket per API key for external traffic.', 'Todo', 'Urgent', 'Devin Zhao'),
     ('task-103', 'proj-1', 'Database Isolation Unit Tests', 'Write integration tests ensuring zero data leak across organizations.', 'Review', 'Medium', 'Sarah Connor'),
     ('task-201', 'proj-2', 'Design Telemetry Chart Wireframes', 'Draft Figma components for latency percentiles and error rates.', 'In Progress', 'Medium', 'Sarah Connor');
+
+  -- Seed Tasks (Stark Industries)
+  INSERT OR IGNORE INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name) VALUES
+    ('task-401', 'proj-4', 'Thermal Safety Interlocks', 'Calibrate magnetic containment sensors for 100GW output spikes.', 'In Progress', 'Urgent', 'Nelson Rivera'),
+    ('task-501', 'proj-5', 'Optimize Attention Mechanism', 'Quantize transformer weights for on-device flight helmet compute.', 'Todo', 'High', 'Devin Zhao');
 `);
 
 database.close();
 
-console.log("DevFlow SQL database schema and user seed data are ready.");
+console.log(
+  "DevFlow multi-tenant SQL database schema and seed data are ready.",
+);

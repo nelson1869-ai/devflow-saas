@@ -11,6 +11,7 @@ import type { User } from "../../lib/auth";
 import type { TaskComment } from "../../lib/comments";
 import type { WorkspaceTag } from "../../lib/tags";
 import type { ActivityItem } from "../../lib/activity-types";
+import type { SavedView } from "../../lib/saved-views";
 import { TaskCard } from "../../tasks/TaskCard";
 import { EditTaskModal } from "../../tasks/EditTaskModal";
 import { TaskAuditDrawer } from "../../tasks/TaskAuditDrawer";
@@ -28,6 +29,8 @@ import {
   bulkUpdateTaskPriorityAction,
   bulkUpdateTaskTagAction,
   bulkDeleteTasksAction,
+  createSavedViewAction,
+  deleteSavedViewAction,
 } from "../../lib/actions";
 
 type ProjectTasksViewProps = Readonly<{
@@ -36,6 +39,7 @@ type ProjectTasksViewProps = Readonly<{
   initialComments: readonly TaskComment[];
   workspaceTags: readonly WorkspaceTag[];
   initialActivities?: readonly ActivityItem[];
+  savedViews?: readonly SavedView[];
   currentUser: User;
   allUsers: readonly User[];
 }>;
@@ -91,12 +95,15 @@ const priorityRank: Record<TaskPriority, number> = {
   Low: 1,
 };
 
+const viewIcons = ["🔍", "🔥", "⚡", "🎨", "🚀", "🐛", "🚨", "🎯", "💡"];
+
 export function ProjectTasksView({
   projectId,
   initialTasks,
   initialComments,
   workspaceTags,
   initialActivities = [],
+  savedViews = [],
   currentUser,
   allUsers,
 }: ProjectTasksViewProps) {
@@ -124,6 +131,7 @@ export function ProjectTasksView({
   const [isPending, startTransition] = useTransition();
 
   // Filter & Sort States
+  const [activePresetTab, setActivePresetTab] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<TaskFilter>("All");
   const [selectedAssignee, setSelectedAssignee] = useState<string>("All");
@@ -132,6 +140,12 @@ export function ProjectTasksView({
   const [selectedTag, setSelectedTag] = useState<string>("All");
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const [onlyMyTasks, setOnlyMyTasks] = useState(false);
+
+  // Save View Modal State
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [newViewName, setNewViewName] = useState("");
+  const [newViewIcon, setNewViewIcon] = useState("🔍");
+  const [saveModalError, setSaveModalError] = useState<string | null>(null);
 
   // Form State
   const defaultTag = workspaceTags[0]?.name || "feature";
@@ -162,6 +176,7 @@ export function ProjectTasksView({
 
   const handleTagClick = (tagName: string) => {
     setSelectedTag((prev) => (prev === tagName ? "All" : tagName));
+    setActivePresetTab("custom");
   };
 
   const handleToggleSelect = (taskId: string) => {
@@ -173,6 +188,99 @@ export function ProjectTasksView({
         next.add(taskId);
       }
       return next;
+    });
+  };
+
+  // Preset Tabs Trigger Handler
+  const handleSelectPresetTab = (tabId: string) => {
+    setActivePresetTab(tabId);
+
+    if (tabId === "all") {
+      setSelectedStatus("All");
+      setSelectedPriority("All");
+      setSelectedTag("All");
+      setSelectedAssignee("All");
+      setSearchQuery("");
+      setOnlyMyTasks(false);
+    } else if (tabId === "my-tasks") {
+      setSelectedStatus("All");
+      setSelectedPriority("All");
+      setSelectedTag("All");
+      setSelectedAssignee("All");
+      setSearchQuery("");
+      setOnlyMyTasks(true);
+    } else if (tabId === "urgent") {
+      setSelectedStatus("All");
+      setSelectedPriority("Urgent");
+      setSelectedTag("All");
+      setSelectedAssignee("All");
+      setSearchQuery("");
+      setOnlyMyTasks(false);
+    } else if (tabId === "in-flight") {
+      setSelectedStatus("In Progress");
+      setSelectedPriority("All");
+      setSelectedTag("All");
+      setSelectedAssignee("All");
+      setSearchQuery("");
+      setOnlyMyTasks(false);
+    } else {
+      // Custom Saved View from SQLite
+      const customView = savedViews.find((v) => v.id === tabId);
+      if (customView) {
+        setSelectedStatus((customView.filters.status as TaskFilter) || "All");
+        setSelectedPriority(
+          (customView.filters.priority as PriorityFilter) || "All",
+        );
+        setSelectedTag(customView.filters.tag || "All");
+        setSelectedAssignee(customView.filters.assignee || "All");
+        setSearchQuery(customView.filters.query || "");
+        setOnlyMyTasks(customView.filters.assignee === currentUser.name);
+      }
+    }
+  };
+
+  const handleSaveCurrentView = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setSaveModalError(null);
+
+    const trimmedName = newViewName.trim();
+    if (!trimmedName) {
+      setSaveModalError("View name is required.");
+      return;
+    }
+
+    const filtersJson = JSON.stringify({
+      query: searchQuery,
+      assignee: onlyMyTasks ? currentUser.name : selectedAssignee,
+      tag: selectedTag,
+      priority: selectedPriority,
+      status: selectedStatus,
+    });
+
+    const formData = new FormData();
+    formData.append("projectId", projectId);
+    formData.append("name", trimmedName);
+    formData.append("icon", newViewIcon);
+    formData.append("filtersJson", filtersJson);
+
+    startTransition(async () => {
+      const res = await createSavedViewAction(formData);
+      if (!res.success) {
+        setSaveModalError(res.error || "Failed to save filter view.");
+      } else {
+        setNewViewName("");
+        setIsSaveModalOpen(false);
+      }
+    });
+  };
+
+  const handleDeleteSavedView = (viewId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    startTransition(async () => {
+      await deleteSavedViewAction(viewId, projectId);
+      if (activePresetTab === viewId) {
+        handleSelectPresetTab("all");
+      }
     });
   };
 
@@ -366,38 +474,19 @@ export function ProjectTasksView({
 
   const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
     setTasks((prev) =>
-      prev.map((task) => {
-        if (task.id === taskId) {
-          return { ...task, status: newStatus };
-        }
-        if (task.blockedBy && task.blockedBy.length > 0) {
-          return {
-            ...task,
-            blockedBy: task.blockedBy.map((d) =>
-              d.dependsOnTaskId === taskId
-                ? { ...d, dependsOnTaskStatus: newStatus }
-                : d,
-            ),
-          };
-        }
-        return task;
-      }),
+      prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)),
     );
 
     startTransition(async () => {
       const res = await updateTaskStatusAction(taskId, newStatus, projectId);
       if (!res.success) {
+        alert(res.error || "Failed to update task status.");
         setTasks(initialTasks);
       }
     });
   };
 
   const handleDeleteTask = (taskId: string) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this task?",
-    );
-    if (!confirmed) return;
-
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
     setSelectedTaskIds((prev) => {
       const next = new Set(prev);
@@ -414,14 +503,9 @@ export function ProjectTasksView({
     });
   };
 
-  // ==========================================
-  // BULK BATCH ACTION HANDLERS (Phase 60)
-  // ==========================================
-
-  const handleBatchStatus = (newStatus: TaskStatus) => {
+  // Bulk Operations Handlers
+  const handleBulkStatusChange = (newStatus: TaskStatus) => {
     const ids = Array.from(selectedTaskIds);
-    if (ids.length === 0) return;
-
     setTasks((prev) =>
       prev.map((t) =>
         selectedTaskIds.has(t.id) ? { ...t, status: newStatus } : t,
@@ -432,19 +516,17 @@ export function ProjectTasksView({
     startTransition(async () => {
       const res = await bulkUpdateTaskStatusAction(ids, newStatus, projectId);
       if (!res.success) {
-        alert(res.error || "Failed to batch move tasks.");
+        alert(res.error || "Failed to batch update statuses.");
         setTasks(initialTasks);
       }
     });
   };
 
-  const handleBatchAssign = (newAssigneeName: string) => {
+  const handleBulkAssigneeChange = (newAssignee: string) => {
     const ids = Array.from(selectedTaskIds);
-    if (ids.length === 0) return;
-
     setTasks((prev) =>
       prev.map((t) =>
-        selectedTaskIds.has(t.id) ? { ...t, assigneeName: newAssigneeName } : t,
+        selectedTaskIds.has(t.id) ? { ...t, assigneeName: newAssignee } : t,
       ),
     );
     setSelectedTaskIds(new Set());
@@ -452,7 +534,7 @@ export function ProjectTasksView({
     startTransition(async () => {
       const res = await bulkUpdateTaskAssigneeAction(
         ids,
-        newAssigneeName,
+        newAssignee,
         projectId,
       );
       if (!res.success) {
@@ -462,10 +544,8 @@ export function ProjectTasksView({
     });
   };
 
-  const handleBatchPriority = (newPriority: TaskPriority) => {
+  const handleBulkPriorityChange = (newPriority: TaskPriority) => {
     const ids = Array.from(selectedTaskIds);
-    if (ids.length === 0) return;
-
     setTasks((prev) =>
       prev.map((t) =>
         selectedTaskIds.has(t.id) ? { ...t, priority: newPriority } : t,
@@ -486,10 +566,8 @@ export function ProjectTasksView({
     });
   };
 
-  const handleBatchTag = (newTag: string) => {
+  const handleBulkTagChange = (newTag: string) => {
     const ids = Array.from(selectedTaskIds);
-    if (ids.length === 0) return;
-
     setTasks((prev) =>
       prev.map((t) => (selectedTaskIds.has(t.id) ? { ...t, tag: newTag } : t)),
     );
@@ -504,12 +582,10 @@ export function ProjectTasksView({
     });
   };
 
-  const handleBatchDelete = () => {
+  const handleBulkDelete = () => {
     const ids = Array.from(selectedTaskIds);
-    if (ids.length === 0) return;
-
     const confirmed = window.confirm(
-      `Are you sure you want to permanently delete all ${ids.length} selected tasks?`,
+      `Are you sure you want to delete ${ids.length} selected tasks?`,
     );
     if (!confirmed) return;
 
@@ -525,26 +601,29 @@ export function ProjectTasksView({
     });
   };
 
-  const clearAllFilters = () => {
-    setSearchQuery("");
-    setSelectedStatus("All");
-    setSelectedAssignee("All");
-    setSelectedPriority("All");
-    setSelectedTag("All");
-    setSortBy("default");
-    setOnlyMyTasks(false);
+  // Drag & Drop Handlers
+  const handleDragOver = (e: React.DragEvent, columnStatus: TaskStatus) => {
+    e.preventDefault();
+    setDragOverColumn(columnStatus);
   };
 
-  const hasActiveFilters =
-    searchQuery.trim() !== "" ||
-    selectedStatus !== "All" ||
-    selectedAssignee !== "All" ||
-    selectedPriority !== "All" ||
-    selectedTag !== "All" ||
-    sortBy !== "default" ||
-    onlyMyTasks;
+  const handleDragLeave = () => {
+    setDragOverColumn(null);
+  };
 
-  // Compound Filter & Sort Predicate
+  const handleDrop = (e: React.DragEvent, newStatus: TaskStatus) => {
+    e.preventDefault();
+    setDragOverColumn(null);
+    const taskId = e.dataTransfer.getData("text/plain");
+    if (!taskId) return;
+
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.status === newStatus) return;
+
+    handleStatusChange(taskId, newStatus);
+  };
+
+  // Filter & Sort Logic
   const filteredTasks = useMemo(() => {
     const filtered = tasks.filter((task) => {
       const matchesStatus =
@@ -618,6 +697,17 @@ export function ProjectTasksView({
     }
   };
 
+  // Preset Counts
+  const myTasksCount = tasks.filter(
+    (t) => t.assigneeName === currentUser.name,
+  ).length;
+  const urgentTasksCount = tasks.filter(
+    (t) => t.priority === "Urgent" || t.priority === "High",
+  ).length;
+  const inFlightTasksCount = tasks.filter(
+    (t) => t.status === "In Progress" || t.status === "Review",
+  ).length;
+
   return (
     <section aria-labelledby="tasks-section-heading" className="space-y-6">
       {/* Top Header Bar */}
@@ -682,6 +772,117 @@ export function ProjectTasksView({
         </div>
       </div>
 
+      {/* Saved Filter Preset Tabs Strip (Phase 64) */}
+      <div className="flex flex-wrap items-center gap-2 overflow-x-auto pb-1">
+        {/* System Preset 1: All Tasks */}
+        <button
+          type="button"
+          onClick={() => handleSelectPresetTab("all")}
+          className={[
+            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+            activePresetTab === "all"
+              ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shadow-sm"
+              : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
+          ].join(" ")}
+        >
+          <span>📋</span>
+          <span>All Tasks</span>
+          <span className="rounded-full bg-slate-800 px-1.5 py-0.2 text-[10px] text-slate-400">
+            {tasks.length}
+          </span>
+        </button>
+
+        {/* System Preset 2: Assigned to Me */}
+        <button
+          type="button"
+          onClick={() => handleSelectPresetTab("my-tasks")}
+          className={[
+            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+            activePresetTab === "my-tasks"
+              ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shadow-sm"
+              : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
+          ].join(" ")}
+        >
+          <span>👤</span>
+          <span>Assigned to Me</span>
+          <span className="rounded-full bg-slate-800 px-1.5 py-0.2 text-[10px] text-slate-400">
+            {myTasksCount}
+          </span>
+        </button>
+
+        {/* System Preset 3: Urgent & High */}
+        <button
+          type="button"
+          onClick={() => handleSelectPresetTab("urgent")}
+          className={[
+            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+            activePresetTab === "urgent"
+              ? "bg-rose-500/20 text-rose-300 ring-1 ring-rose-500/40 shadow-sm"
+              : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
+          ].join(" ")}
+        >
+          <span>🔥</span>
+          <span>Urgent & High</span>
+          <span className="rounded-full bg-slate-800 px-1.5 py-0.2 text-[10px] text-rose-400">
+            {urgentTasksCount}
+          </span>
+        </button>
+
+        {/* System Preset 4: In Flight */}
+        <button
+          type="button"
+          onClick={() => handleSelectPresetTab("in-flight")}
+          className={[
+            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+            activePresetTab === "in-flight"
+              ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40 shadow-sm"
+              : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
+          ].join(" ")}
+        >
+          <span>⚡</span>
+          <span>In Flight</span>
+          <span className="rounded-full bg-slate-800 px-1.5 py-0.2 text-[10px] text-amber-400">
+            {inFlightTasksCount}
+          </span>
+        </button>
+
+        {/* Custom Saved Views from SQLite */}
+        {savedViews.map((view) => (
+          <button
+            key={view.id}
+            type="button"
+            onClick={() => handleSelectPresetTab(view.id)}
+            className={[
+              "group inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+              activePresetTab === view.id
+                ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shadow-sm"
+                : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
+            ].join(" ")}
+          >
+            <span>{view.icon}</span>
+            <span>{view.name}</span>
+            <span
+              onClick={(e) => handleDeleteSavedView(view.id, e)}
+              title="Delete saved view"
+              className="ml-1 rounded p-0.5 text-slate-500 opacity-0 group-hover:opacity-100 hover:bg-rose-500/20 hover:text-rose-300 transition"
+            >
+              ✕
+            </span>
+          </button>
+        ))}
+
+        {/* Save Current View Action Button */}
+        <button
+          type="button"
+          onClick={() => setIsSaveModalOpen(true)}
+          title="Save active filter criteria as a custom tab"
+          className="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-700 bg-slate-950/40 px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:border-cyan-400 hover:text-cyan-300 transition"
+        >
+          <span>💾</span>
+          <span>Save View</span>
+        </button>
+      </div>
+
       {/* Advanced Filter & Sort Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
         {/* Select All Filtered Checkbox Button */}
@@ -712,14 +913,20 @@ export function ProjectTasksView({
             type="search"
             placeholder="Search tasks, tags, assignees..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setActivePresetTab("custom");
+            }}
             className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 transition hover:border-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
           />
         </div>
 
         <button
           type="button"
-          onClick={() => setOnlyMyTasks((prev) => !prev)}
+          onClick={() => {
+            setOnlyMyTasks((prev) => !prev);
+            setActivePresetTab("custom");
+          }}
           className={[
             "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition",
             onlyMyTasks
@@ -734,7 +941,10 @@ export function ProjectTasksView({
         {/* Dynamic Workspace Tag Filter */}
         <select
           value={selectedTag}
-          onChange={(e) => setSelectedTag(e.target.value)}
+          onChange={(e) => {
+            setSelectedTag(e.target.value);
+            setActivePresetTab("custom");
+          }}
           aria-label="Filter by Tag"
           className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-300 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 font-mono lowercase"
         >
@@ -749,7 +959,10 @@ export function ProjectTasksView({
         {!onlyMyTasks && (
           <select
             value={selectedAssignee}
-            onChange={(e) => setSelectedAssignee(e.target.value)}
+            onChange={(e) => {
+              setSelectedAssignee(e.target.value);
+              setActivePresetTab("custom");
+            }}
             aria-label="Filter by Assignee"
             className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-300 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
           >
@@ -764,140 +977,114 @@ export function ProjectTasksView({
 
         <select
           value={selectedPriority}
-          onChange={(e) =>
-            setSelectedPriority(e.target.value as PriorityFilter)
-          }
+          onChange={(e) => {
+            setSelectedPriority(e.target.value as PriorityFilter);
+            setActivePresetTab("custom");
+          }}
           aria-label="Filter by Priority"
           className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-300 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
         >
-          {priorityOptions.map((p) => (
-            <option key={p} value={p}>
-              {p === "All" ? "All Priorities" : `${p} Priority`}
+          {priorityOptions.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt === "All" ? "All Priorities" : `${opt} Priority`}
             </option>
           ))}
         </select>
 
-        {/* Smart Sorting Dropdown */}
+        {viewMode === "grid" && (
+          <select
+            value={selectedStatus}
+            onChange={(e) => {
+              setSelectedStatus(e.target.value as TaskFilter);
+              setActivePresetTab("custom");
+            }}
+            aria-label="Filter by Status"
+            className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-300 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+          >
+            {taskFilterOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt === "All" ? "All Statuses" : opt}
+              </option>
+            ))}
+          </select>
+        )}
+
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortOption)}
-          aria-label="Sort tasks"
+          aria-label="Sort Tasks"
           className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-300 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
         >
           <option value="default">Default Order</option>
           <option value="dueSoonest">📅 Due Soonest</option>
-          <option value="priorityHighest">⚡ Priority Highest</option>
+          <option value="priorityHighest">⚡ Highest Priority</option>
         </select>
-
-        {viewMode === "grid" && (
-          <div
-            role="tablist"
-            aria-label="Filter tasks by status"
-            className="flex flex-wrap gap-1"
-          >
-            {taskFilterOptions.map((opt) => {
-              const isSelected = selectedStatus === opt;
-              return (
-                <button
-                  key={opt}
-                  type="button"
-                  role="tab"
-                  aria-selected={isSelected}
-                  onClick={() => setSelectedStatus(opt)}
-                  className={[
-                    "rounded-lg px-2 py-1 text-xs font-medium transition",
-                    isSelected
-                      ? "bg-cyan-400 text-slate-950"
-                      : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white",
-                  ].join(" ")}
-                >
-                  {opt}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {hasActiveFilters && (
-          <button
-            type="button"
-            onClick={clearAllFilters}
-            className="ml-auto text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition"
-          >
-            Reset Filters
-          </button>
-        )}
       </div>
 
-      {/* Task Creation Form with Dynamic Tags */}
+      {/* Inline Create Task Form */}
       {isFormOpen && (
-        <div className="rounded-2xl border border-cyan-500/30 bg-slate-900/90 p-6 shadow-xl">
-          <h3 className="text-base font-semibold text-white">
-            Create New Task
-          </h3>
+        <form
+          onSubmit={handleCreateTask}
+          className="space-y-4 rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-6 shadow-sm ring-1 ring-cyan-500/20"
+        >
+          <h3 className="text-sm font-semibold text-white">Create New Task</h3>
 
           {formError && (
-            <div
-              role="alert"
-              className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
-            >
+            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300">
               {formError}
             </div>
           )}
 
-          <form onSubmit={handleCreateTask} className="mt-4 space-y-4">
+          <div className="space-y-3">
             <div>
               <label
-                htmlFor="task-title"
+                htmlFor="task-title-input"
                 className="block text-xs font-medium text-slate-300"
               >
-                Task Title
+                Title
               </label>
               <input
-                id="task-title"
+                id="task-title-input"
                 type="text"
                 required
-                disabled={isPending}
-                placeholder="e.g. Set up JWT authentication"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
+                placeholder="e.g. Implement OAuth2 provider"
+                className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               />
             </div>
 
             <div>
               <label
-                htmlFor="task-description"
+                htmlFor="task-desc-input"
                 className="block text-xs font-medium text-slate-300"
               >
-                Description (Markdown & Checklists supported)
+                Description
               </label>
               <textarea
-                id="task-description"
-                rows={3}
+                id="task-desc-input"
+                rows={2}
                 required
-                disabled={isPending}
-                placeholder="- [ ] Acceptance criterion 1&#10;- [ ] Acceptance criterion 2"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 w-full font-mono rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
+                placeholder="Detailed acceptance criteria..."
+                className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div>
                 <label
-                  htmlFor="task-status"
+                  htmlFor="task-status-select"
                   className="block text-xs font-medium text-slate-300"
                 >
                   Status
                 </label>
                 <select
-                  id="task-status"
+                  id="task-status-select"
                   value={status}
-                  disabled={isPending}
                   onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
                 >
                   <option value="Todo">Todo</option>
                   <option value="In Progress">In Progress</option>
@@ -908,17 +1095,16 @@ export function ProjectTasksView({
 
               <div>
                 <label
-                  htmlFor="task-priority"
+                  htmlFor="task-priority-select"
                   className="block text-xs font-medium text-slate-300"
                 >
                   Priority
                 </label>
                 <select
-                  id="task-priority"
+                  id="task-priority-select"
                   value={priority}
-                  disabled={isPending}
                   onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
                 >
                   <option value="Low">Low</option>
                   <option value="Medium">Medium</option>
@@ -926,22 +1112,19 @@ export function ProjectTasksView({
                   <option value="Urgent">Urgent</option>
                 </select>
               </div>
-            </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
               <div>
                 <label
-                  htmlFor="task-tag"
+                  htmlFor="task-tag-select"
                   className="block text-xs font-medium text-slate-300"
                 >
                   Domain Tag
                 </label>
                 <select
-                  id="task-tag"
+                  id="task-tag-select"
                   value={tag}
-                  disabled={isPending}
                   onChange={(e) => setTag(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 font-mono lowercase"
+                  className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 font-mono lowercase"
                 >
                   {workspaceTags.map((t) => (
                     <option key={t.id} value={t.name}>
@@ -953,235 +1136,331 @@ export function ProjectTasksView({
 
               <div>
                 <label
-                  htmlFor="task-due"
+                  htmlFor="task-due-date-input"
                   className="block text-xs font-medium text-slate-300"
                 >
-                  Due Date (Optional)
+                  Due Date
                 </label>
                 <input
-                  id="task-due"
+                  id="task-due-date-input"
                   type="date"
-                  disabled={isPending}
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs font-mono text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
                 />
               </div>
-
-              <div>
-                <label
-                  htmlFor="task-assignee"
-                  className="block text-xs font-medium text-slate-300"
-                >
-                  Assignee
-                </label>
-                <select
-                  id="task-assignee"
-                  value={assigneeName}
-                  disabled={isPending}
-                  onChange={(e) => setAssigneeName(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
-                >
-                  {allUsers.map((u) => (
-                    <option key={u.id} value={u.name}>
-                      {u.name} {u.id === currentUser.id ? "(You)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsFormOpen(false)}
-                className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+            <div>
+              <label
+                htmlFor="task-assignee-select"
+                className="block text-xs font-medium text-slate-300"
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isPending}
-                className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-50"
+                Assignee
+              </label>
+              <select
+                id="task-assignee-select"
+                value={assigneeName}
+                onChange={(e) => setAssigneeName(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               >
-                {isPending ? "Saving to Database..." : "Save Task"}
-              </button>
+                {allUsers.map((user) => (
+                  <option key={user.id} value={user.name}>
+                    {user.name} ({user.role})
+                  </option>
+                ))}
+              </select>
             </div>
-          </form>
-        </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setIsFormOpen(false)}
+              className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isPending || !title.trim() || !description.trim()}
+              className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-40 transition"
+            >
+              {isPending ? "Creating..." : "Create Task"}
+            </button>
+          </div>
+        </form>
       )}
 
-      {/* Kanban Board View with Drag & Drop & Bulk Selection */}
+      {/* Main Viewport: Kanban or Grid */}
       {viewMode === "kanban" ? (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {kanbanColumns.map((col) => {
             const columnTasks = filteredTasks.filter(
               (t) => t.status === col.status,
             );
-            const isOverThisColumn = dragOverColumn === col.status;
+            const isTargeted = dragOverColumn === col.status;
 
             return (
               <div
                 key={col.status}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                  if (dragOverColumn !== col.status) {
-                    setDragOverColumn(col.status);
-                  }
-                }}
-                onDragLeave={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                    setDragOverColumn(null);
-                  }
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDragOverColumn(null);
-                  const taskId = e.dataTransfer.getData("text/plain");
-                  if (taskId) {
-                    handleStatusChange(taskId, col.status);
-                  }
-                }}
+                onDragOver={(e) => handleDragOver(e, col.status)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, col.status)}
                 className={[
-                  "flex flex-col rounded-2xl border p-4 transition-all duration-150",
-                  isOverThisColumn
-                    ? "border-cyan-400 bg-cyan-500/10 ring-2 ring-cyan-400/30 scale-[1.01]"
-                    : "border-slate-800/80 bg-slate-900/40",
+                  "flex flex-col rounded-2xl border bg-slate-900/40 p-4 transition-colors min-h-[420px]",
+                  isTargeted
+                    ? "border-cyan-400 bg-cyan-950/20 ring-2 ring-cyan-400/30"
+                    : "border-slate-800/80",
                 ].join(" ")}
               >
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="mb-4 flex items-center justify-between">
                   <h3
                     className={`text-xs font-bold uppercase tracking-wider ${col.accent}`}
                   >
                     {col.label}
                   </h3>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-300">
+                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-400">
                     {columnTasks.length}
                   </span>
                 </div>
 
-                <div className="mt-4 flex-1">
-                  {/* Drop Placeholder Zone */}
-                  {isOverThisColumn && (
-                    <div className="mb-3 rounded-xl border-2 border-dashed border-cyan-400/60 bg-cyan-500/10 p-3 text-center text-xs font-semibold text-cyan-300 animate-pulse">
-                      Drop here to move to {col.label}
-                    </div>
-                  )}
+                <div className="flex flex-1 flex-col gap-3">
+                  {columnTasks.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      isSelected={selectedTaskIds.has(task.id)}
+                      onToggleSelect={handleToggleSelect}
+                      onStatusChange={handleStatusChange}
+                      onDelete={handleDeleteTask}
+                      onEdit={(t) => setEditingTask(t)}
+                      onViewHistory={(t) => setHistoryTask(t)}
+                      onTagClick={handleTagClick}
+                    />
+                  ))}
 
-                  {columnTasks.length === 0 && !isOverThisColumn ? (
-                    <div className="rounded-xl border border-dashed border-slate-800/60 p-6 text-center">
-                      <p className="text-xs text-slate-500">
-                        No {col.label.toLowerCase()} tasks
-                      </p>
+                  {columnTasks.length === 0 && (
+                    <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-slate-800/60 p-6 text-center text-xs text-slate-600">
+                      No tasks in this stage
                     </div>
-                  ) : (
-                    <ul className="space-y-3">
-                      {columnTasks.map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          onStatusChange={handleStatusChange}
-                          onEdit={(t) => setEditingTask(t)}
-                          onDelete={handleDeleteTask}
-                          onUpdateDescription={handleUpdateDescriptionDirectly}
-                          onTagClick={handleTagClick}
-                          onViewHistory={(t) => setHistoryTask(t)}
-                          isDraggable={true}
-                          isSelected={selectedTaskIds.has(task.id)}
-                          onToggleSelect={handleToggleSelect}
-                        />
-                      ))}
-                    </ul>
                   )}
                 </div>
               </div>
             );
           })}
         </div>
-      ) : /* Grid View */
-      filteredTasks.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-800 p-10 text-center">
-          <p className="text-sm text-slate-400">
-            No tasks found matching your filter criteria.
-          </p>
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              className="mt-3 inline-flex items-center text-xs font-semibold text-cyan-400 hover:text-cyan-300"
-            >
-              Clear all filters
-            </button>
-          )}
-        </div>
       ) : (
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredTasks.map((task) => (
             <TaskCard
               key={task.id}
               task={task}
-              onStatusChange={handleStatusChange}
-              onEdit={(t) => setEditingTask(t)}
-              onDelete={handleDeleteTask}
-              onUpdateDescription={handleUpdateDescriptionDirectly}
-              onTagClick={handleTagClick}
-              onViewHistory={(t) => setHistoryTask(t)}
-              isDraggable={false}
               isSelected={selectedTaskIds.has(task.id)}
               onToggleSelect={handleToggleSelect}
+              onStatusChange={handleStatusChange}
+              onDelete={handleDeleteTask}
+              onEdit={(t) => setEditingTask(t)}
+              onViewHistory={(t) => setHistoryTask(t)}
+              onTagClick={handleTagClick}
             />
           ))}
-        </ul>
+
+          {filteredTasks.length === 0 && (
+            <div className="col-span-full rounded-2xl border border-dashed border-slate-800 p-12 text-center text-xs text-slate-500">
+              No tasks found matching your filter criteria.
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Floating Bulk Multi-Task Action Bar */}
+      {/* Floating Multi-Task Bulk Action Bar (Phase 60) */}
       <BulkActionBar
         selectedCount={selectedTaskIds.size}
         allUsers={allUsers}
         workspaceTags={workspaceTags}
-        onBatchStatus={handleBatchStatus}
-        onBatchAssign={handleBatchAssign}
-        onBatchPriority={handleBatchPriority}
-        onBatchTag={handleBatchTag}
-        onBatchDelete={handleBatchDelete}
+        onBatchStatus={handleBulkStatusChange}
+        onBatchAssign={handleBulkAssigneeChange}
+        onBatchPriority={handleBulkPriorityChange}
+        onBatchTag={handleBulkTagChange}
+        onBatchDelete={handleBulkDelete}
         onClearSelection={() => setSelectedTaskIds(new Set())}
         isPending={isPending}
       />
 
-      {/* Edit Task Modal with Dependencies & Blocker Linking */}
+      {/* Edit Task Modal */}
       {editingTask && (
         <EditTaskModal
-          key={editingTask.id}
           task={editingTask}
           allProjectTasks={tasks}
           allUsers={allUsers}
-          workspaceTags={workspaceTags}
           currentUser={currentUser}
           comments={comments.filter((c) => c.taskId === editingTask.id)}
+          workspaceTags={workspaceTags}
           isOpen={Boolean(editingTask)}
           onClose={() => setEditingTask(null)}
           onSave={handleSaveTask}
-          onAddComment={(content) => handleAddComment(content, editingTask.id)}
+          onAddComment={handleAddComment}
           onAddDependency={handleAddDependency}
           onRemoveDependency={handleRemoveDependency}
-          isPending={isPending}
         />
       )}
 
-      {/* Task Audit History & Event Timeline Drawer */}
+      {/* Task Audit Drawer */}
       {historyTask && (
         <TaskAuditDrawer
-          key={historyTask.id}
           task={historyTask}
-          activities={activities}
-          comments={comments}
+          activities={activities.filter(
+            (a) =>
+              a.taskId === historyTask.id ||
+              a.entityTitle === historyTask.title,
+          )}
+          comments={comments.filter((c) => c.taskId === historyTask.id)}
           currentUser={currentUser}
           isOpen={Boolean(historyTask)}
           onClose={() => setHistoryTask(null)}
           onAddComment={(content) => handleAddComment(content, historyTask.id)}
-          isPending={isPending}
         />
+      )}
+
+      {/* Save Filter View Modal (Phase 64) */}
+      {isSaveModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={() => setIsSaveModalOpen(false)}
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm"
+          />
+
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white">
+                Save Active Filter as Custom Tab
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsSaveModalOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            {saveModalError && (
+              <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300">
+                {saveModalError}
+              </div>
+            )}
+
+            {/* Active Filter Criteria Preview */}
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-1.5 text-xs">
+              <span className="text-[11px] font-semibold text-slate-400 block">
+                Filters to be saved:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {selectedTag !== "All" && (
+                  <span className="rounded bg-cyan-500/10 px-2 py-0.5 text-[11px] font-mono text-cyan-300">
+                    Tag: #{selectedTag}
+                  </span>
+                )}
+                {selectedPriority !== "All" && (
+                  <span className="rounded bg-amber-500/10 px-2 py-0.5 text-[11px] font-mono text-amber-300">
+                    Priority: {selectedPriority}
+                  </span>
+                )}
+                {(onlyMyTasks || selectedAssignee !== "All") && (
+                  <span className="rounded bg-purple-500/10 px-2 py-0.5 text-[11px] font-mono text-purple-300">
+                    Assignee:{" "}
+                    {onlyMyTasks ? currentUser.name : selectedAssignee}
+                  </span>
+                )}
+                {selectedStatus !== "All" && (
+                  <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-[11px] font-mono text-emerald-300">
+                    Status: {selectedStatus}
+                  </span>
+                )}
+                {searchQuery.trim() && (
+                  <span className="rounded bg-slate-800 px-2 py-0.5 text-[11px] font-mono text-slate-300">
+                    Search: &ldquo;{searchQuery}&rdquo;
+                  </span>
+                )}
+                {selectedTag === "All" &&
+                  selectedPriority === "All" &&
+                  !onlyMyTasks &&
+                  selectedAssignee === "All" &&
+                  selectedStatus === "All" &&
+                  !searchQuery.trim() && (
+                    <span className="text-slate-500">
+                      All Tasks (No filters)
+                    </span>
+                  )}
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveCurrentView} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="view-name-input"
+                  className="block text-xs font-medium text-slate-300"
+                >
+                  View Preset Name
+                </label>
+                <input
+                  id="view-name-input"
+                  type="text"
+                  required
+                  placeholder="e.g. Frontend Critical Bugs"
+                  value={newViewName}
+                  onChange={(e) => setNewViewName(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Choose Tab Icon
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {viewIcons.map((ic) => (
+                    <button
+                      key={ic}
+                      type="button"
+                      onClick={() => setNewViewIcon(ic)}
+                      className={[
+                        "flex h-8 w-8 items-center justify-center rounded-lg text-sm transition",
+                        newViewIcon === ic
+                          ? "bg-cyan-400 text-slate-950 shadow-md ring-2 ring-cyan-300"
+                          : "border border-slate-800 bg-slate-950 text-slate-300 hover:border-slate-700 hover:bg-slate-800",
+                      ].join(" ")}
+                    >
+                      {ic}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSaveModalOpen(false)}
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending || !newViewName.trim()}
+                  className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-40 transition"
+                >
+                  {isPending ? "Saving..." : "Save Custom Tab"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </section>
   );

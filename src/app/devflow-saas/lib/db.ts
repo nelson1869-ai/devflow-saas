@@ -154,9 +154,23 @@ try {
       delivered_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (webhook_id) REFERENCES devflow_webhooks(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS devflow_saved_views (
+      id TEXT PRIMARY KEY,
+      org_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      project_id TEXT,
+      name TEXT NOT NULL,
+      icon TEXT NOT NULL DEFAULT '🔍',
+      filters_json TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
+    );
   `);
 
-  // Runtime self-healing migrations for existing SQLite databases
+  // Runtime self-healing column migrations
   try {
     db.exec(
       `ALTER TABLE devflow_projects ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;`,

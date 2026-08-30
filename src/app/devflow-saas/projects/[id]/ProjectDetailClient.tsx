@@ -7,6 +7,7 @@ import type { User } from "../../lib/auth";
 import type { TaskComment } from "../../lib/comments";
 import type { WorkspaceTag } from "../../lib/tags";
 import type { ActivityItem } from "../../lib/activity-types";
+import type { SavedView } from "../../lib/saved-views";
 import { ProjectTasksView } from "./ProjectTasksView";
 import { ProjectSettingsView } from "./ProjectSettingsView";
 import { restoreProjectAction } from "../../lib/actions";
@@ -17,6 +18,7 @@ type ProjectDetailClientProps = Readonly<{
   initialComments: readonly TaskComment[];
   workspaceTags: readonly WorkspaceTag[];
   initialActivities: readonly ActivityItem[];
+  savedViews?: readonly SavedView[];
   currentUser: User;
   allUsers: readonly User[];
 }>;
@@ -33,12 +35,13 @@ export function ProjectDetailClient({
   initialComments,
   workspaceTags,
   initialActivities,
+  savedViews = [],
   currentUser,
   allUsers,
 }: ProjectDetailClientProps) {
   const [project, setProject] = useState<Project>(initialProject);
   const [activeTab, setActiveTab] = useState<"board" | "settings">("board");
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const handleRestore = () => {
     setProject((prev) => ({ ...prev, isArchived: false }));
@@ -58,65 +61,56 @@ export function ProjectDetailClient({
       {project.isArchived && (
         <div
           role="status"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-300 shadow-md"
+          className="flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between"
         >
-          <div className="flex items-center gap-2.5 text-xs">
-            <span className="text-lg">📦</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xl">📦</span>
             <div>
-              <p className="font-bold">
-                This project is currently archived (Read-Only).
+              <p className="text-xs font-bold text-amber-300">
+                This project is archived
               </p>
-              <p className="text-[11px] text-amber-400/80">
-                All tasks and settings are preserved. Restore this project to
-                resume editing.
+              <p className="text-[11px] text-amber-200/70">
+                It is in read-only cold storage. Tasks cannot be modified until
+                restored.
               </p>
             </div>
           </div>
-
           <button
             type="button"
-            disabled={isPending}
             onClick={handleRestore}
-            className="rounded-lg bg-amber-400 px-3.5 py-1.5 text-xs font-bold text-slate-950 hover:bg-amber-300 disabled:opacity-50 transition"
+            className="self-start rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-bold text-slate-950 transition hover:bg-amber-300 sm:self-auto"
           >
-            {isPending ? "Restoring..." : "🔄 Restore Project"}
+            Restore Project
           </button>
         </div>
       )}
 
-      {/* Project Header Banner */}
-      <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 sm:p-8">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <span className="font-mono text-xs font-semibold uppercase tracking-wider text-cyan-400">
-            Key: {project.key}
-          </span>
-          <div className="flex items-center gap-2">
-            {project.isArchived && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
-                <span>📦</span>
-                <span>Archived</span>
+      {/* Project Header */}
+      <header className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-sm font-bold text-cyan-400">
+                {project.key}
               </span>
-            )}
-            <span
-              className={[
-                "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium",
-                statusStyles[project.status],
-              ].join(" ")}
-            >
-              {project.status}
-            </span>
+              <span
+                className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                  statusStyles[project.status]
+                }`}
+              >
+                {project.status}
+              </span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+              {project.name}
+            </h1>
+            <p className="max-w-3xl text-sm text-slate-400">
+              {project.description}
+            </p>
           </div>
         </div>
 
-        <h1 className="mt-4 text-3xl font-bold text-white sm:text-4xl">
-          {project.name}
-        </h1>
-
-        <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:text-base">
-          {project.description}
-        </p>
-
-        {/* Project View Tabs */}
+        {/* Navigation Tabs */}
         <div className="mt-8 flex border-b border-slate-800">
           <button
             type="button"
@@ -153,6 +147,7 @@ export function ProjectDetailClient({
           initialComments={initialComments}
           workspaceTags={workspaceTags}
           initialActivities={initialActivities}
+          savedViews={savedViews}
           currentUser={currentUser}
           allUsers={allUsers}
         />

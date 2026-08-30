@@ -65,7 +65,7 @@ db.exec(`
   );
 `);
 
-// 5. Tasks (with milestone_id)
+// 5. Tasks
 db.exec(`
   CREATE TABLE IF NOT EXISTS devflow_tasks (
     id TEXT PRIMARY KEY,
@@ -182,7 +182,24 @@ db.exec(`
   );
 `);
 
-// Seed Seed Data
+// 13. Saved Filter Views (Phase 64)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS devflow_saved_views (
+    id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    project_id TEXT,
+    name TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT '🔍',
+    filters_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
+  );
+`);
+
+// Seed Initial Data
 const orgCount = db
   .prepare("SELECT count(*) as count FROM devflow_organizations")
   .get().count;
@@ -207,6 +224,105 @@ if (userCount === 0) {
   insertUser.run("usr-2", "Sarah Chen", "sarah@acme.dev", "Member", null);
   insertUser.run("usr-3", "Alex Kim", "alex@acme.dev", "Member", null);
   insertUser.run("usr-4", "Elena Vance", "elena@acme.dev", "Member", null);
+}
+
+const projectCount = db
+  .prepare("SELECT count(*) as count FROM devflow_projects")
+  .get().count;
+if (projectCount === 0) {
+  console.log("Seeding Initial Projects & Tasks...");
+  const insertProj = db.prepare(
+    "INSERT INTO devflow_projects (id, org_id, name, key, description, status) VALUES (?, ?, ?, ?, ?, ?)",
+  );
+  insertProj.run(
+    "proj-1",
+    "org-1",
+    "Cloud Platform API",
+    "PLAT",
+    "Core backend microservices, authentication flow, and REST endpoints.",
+    "Active",
+  );
+  insertProj.run(
+    "proj-2",
+    "org-1",
+    "Customer Mobile App",
+    "MOB",
+    "React Native cross-platform mobile experience with offline sync.",
+    "Active",
+  );
+  insertProj.run(
+    "proj-3",
+    "org-1",
+    "Web Admin Console",
+    "ADM",
+    "Internal tooling, customer success controls, and billing analytics.",
+    "Planning",
+  );
+
+  const insertTask = db.prepare(`
+    INSERT INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  insertTask.run(
+    "task-1",
+    "proj-1",
+    "Implement OAuth2 provider integration",
+    "Connect GitHub and Google OAuth providers with PKCE flow.",
+    "In Progress",
+    "High",
+    "Nelson",
+    "security",
+    "2026-09-05",
+  );
+
+  insertTask.run(
+    "task-2",
+    "proj-1",
+    "Configure Redis Rate Limiter middleware",
+    "Prevent brute-force authentication attacks using sliding-window rate limit algorithm.",
+    "Todo",
+    "Urgent",
+    "Sarah Chen",
+    "backend",
+    "2026-09-02",
+  );
+
+  insertTask.run(
+    "task-3",
+    "proj-1",
+    "Setup Automated SQLite Backup S3 Pipeline",
+    "Cron job for nightly snapshots and WAL checkpoint integrity checks.",
+    "Done",
+    "Medium",
+    "Alex Kim",
+    "infra",
+    "2026-08-28",
+  );
+
+  insertTask.run(
+    "task-4",
+    "proj-1",
+    "Resolve memory leak in WebSocket connection pool",
+    "Clean up event listeners on client disconnect to avoid dangling sockets.",
+    "Todo",
+    "Urgent",
+    "Nelson",
+    "bug",
+    "2026-09-01",
+  );
+
+  insertTask.run(
+    "task-5",
+    "proj-1",
+    "Build responsive project navigation tab strip",
+    "Implement horizontal tab scroll on mobile viewports with accessible active indicators.",
+    "Review",
+    "Medium",
+    "Elena Vance",
+    "frontend",
+    "2026-09-08",
+  );
 }
 
 const tagCount = db
@@ -261,34 +377,47 @@ if (tagCount === 0) {
   );
 }
 
-const milestoneCount = db
-  .prepare("SELECT count(*) as count FROM devflow_milestones")
+const savedViewCount = db
+  .prepare("SELECT count(*) as count FROM devflow_saved_views")
   .get().count;
-if (milestoneCount === 0) {
-  console.log("Seeding Initial Milestones...");
-  const insertMilestone = db.prepare(`
-    INSERT INTO devflow_milestones (id, org_id, project_id, title, description, target_date, status)
+if (savedViewCount === 0) {
+  console.log("Seeding Initial Saved Filter Views...");
+  const insertView = db.prepare(`
+    INSERT INTO devflow_saved_views (id, org_id, user_id, project_id, name, icon, filters_json)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
-  const targetDate = new Date();
-  targetDate.setDate(targetDate.getDate() + 14);
-  const targetIso = targetDate.toISOString().split("T")[0];
-
-  insertMilestone.run(
-    "ms-1",
+  insertView.run(
+    "view-1",
     "org-1",
+    "usr-1",
     "proj-1",
-    "Sprint 24: Core Security & Auth Release",
-    "Complete authentication hardening, rate limiting, and RBAC authorization flow.",
-    targetIso,
-    "Active",
+    "Urgent Bugs",
+    "🔥",
+    JSON.stringify({
+      priority: "Urgent",
+      tag: "bug",
+      status: "All",
+      assignee: "All",
+      query: "",
+    }),
   );
 
-  // Link existing tasks in proj-1 to this sprint milestone
-  db.prepare(
-    "UPDATE devflow_tasks SET milestone_id = 'ms-1' WHERE project_id = 'proj-1'",
-  ).run();
+  insertView.run(
+    "view-2",
+    "org-1",
+    "usr-1",
+    "proj-1",
+    "Frontend Features",
+    "🎨",
+    JSON.stringify({
+      priority: "All",
+      tag: "frontend",
+      status: "All",
+      assignee: "All",
+      query: "",
+    }),
+  );
 }
 
 console.log("✅ Database schema and seeds successfully initialized.");

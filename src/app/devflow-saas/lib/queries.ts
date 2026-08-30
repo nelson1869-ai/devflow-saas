@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "./db";
 import type { Project, ProjectStatus } from "../projects/types";
-import type { Task, TaskPriority, TaskStatus } from "../tasks/types";
+import type { Task, TaskPriority, TaskStatus, TaskTag } from "../tasks/types";
 
 type ProjectRow = {
   id: string;
@@ -21,6 +21,7 @@ type TaskRow = {
   status: TaskStatus;
   priority: TaskPriority;
   assignee_name: string;
+  tag: string;
   created_at: string;
 };
 
@@ -80,7 +81,7 @@ export function getProjectById(id: string): Project | undefined {
 
 export function getTasksByProjectId(projectId: string): readonly Task[] {
   const stmt = db.prepare(`
-    SELECT id, project_id, title, description, status, priority, assignee_name
+    SELECT id, project_id, title, description, status, priority, assignee_name, tag
     FROM devflow_tasks
     WHERE project_id = ?
     ORDER BY created_at DESC
@@ -95,5 +96,6 @@ export function getTasksByProjectId(projectId: string): readonly Task[] {
     status: row.status,
     priority: row.priority,
     assigneeName: row.assignee_name,
+    tag: (row.tag as TaskTag) || "feature",
   }));
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Task, TaskPriority, TaskStatus } from "./types";
+import type { Task, TaskPriority, TaskStatus, TaskTag } from "./types";
 
 type TaskCardProps = Readonly<{
   task: Task;
@@ -23,6 +23,15 @@ const statusStyles: Readonly<Record<TaskStatus, string>> = {
   "In Progress": "text-cyan-400 border-cyan-500/30 bg-cyan-500/10",
   Review: "text-purple-400 border-purple-500/30 bg-purple-500/10",
   Done: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
+};
+
+const tagStyles: Readonly<Record<TaskTag, string>> = {
+  frontend: "text-purple-400 bg-purple-500/10 border-purple-500/30",
+  backend: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30",
+  security: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+  infra: "text-amber-400 bg-amber-500/10 border-amber-500/30",
+  bug: "text-rose-400 bg-rose-500/10 border-rose-500/30",
+  feature: "text-sky-400 bg-sky-500/10 border-sky-500/30",
 };
 
 export function TaskCard({
@@ -116,6 +125,17 @@ export function TaskCard({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Tag Badge */}
+          <span
+            className={[
+              "inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-mono font-medium lowercase tracking-wider",
+              tagStyles[task.tag],
+            ].join(" ")}
+          >
+            {task.tag}
+          </span>
+
+          {/* Priority Badge */}
           <span
             className={[
               "inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",

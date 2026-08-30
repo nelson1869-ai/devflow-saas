@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, type FormEvent } from "react";
-import type { Task, TaskPriority, TaskStatus } from "./types";
+import type { Task, TaskPriority, TaskStatus, TaskTag } from "./types";
 import type { User } from "../lib/auth";
 import type { TaskComment } from "../lib/comments";
 
@@ -33,6 +33,7 @@ export function EditTaskModal({
   const [description, setDescription] = useState(task.description);
   const [status, setStatus] = useState<TaskStatus>(task.status);
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
+  const [tag, setTag] = useState<TaskTag>(task.tag);
   const [assigneeName, setAssigneeName] = useState(task.assigneeName);
   const [newComment, setNewComment] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +73,7 @@ export function EditTaskModal({
       status,
       priority,
       assigneeName,
+      tag,
     });
   };
 
@@ -160,7 +162,7 @@ export function EditTaskModal({
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <div>
               <label
                 htmlFor="edit-task-status"
@@ -173,7 +175,7 @@ export function EditTaskModal({
                 value={status}
                 disabled={isPending}
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               >
                 <option value="Todo">Todo</option>
                 <option value="In Progress">In Progress</option>
@@ -194,12 +196,35 @@ export function EditTaskModal({
                 value={priority}
                 disabled={isPending}
                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
                 <option value="High">High</option>
                 <option value="Urgent">Urgent</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="edit-task-tag"
+                className="block text-xs font-medium text-slate-300"
+              >
+                Domain Tag
+              </label>
+              <select
+                id="edit-task-tag"
+                value={tag}
+                disabled={isPending}
+                onChange={(e) => setTag(e.target.value as TaskTag)}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+              >
+                <option value="feature">feature</option>
+                <option value="bug">bug</option>
+                <option value="frontend">frontend</option>
+                <option value="backend">backend</option>
+                <option value="security">security</option>
+                <option value="infra">infra</option>
               </select>
             </div>
 
@@ -215,7 +240,7 @@ export function EditTaskModal({
                 value={assigneeName}
                 disabled={isPending}
                 onChange={(e) => setAssigneeName(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               >
                 {allUsers.map((u) => (
                   <option key={u.id} value={u.name}>

@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { Task, TaskPriority, TaskStatus } from "../../tasks/types";
+import type {
+  Task,
+  TaskPriority,
+  TaskStatus,
+  TaskTag,
+} from "../../tasks/types";
 import type { User } from "../../lib/auth";
 import type { TaskComment } from "../../lib/comments";
 import { TaskCard } from "../../tasks/TaskCard";
@@ -25,6 +30,7 @@ type ProjectTasksViewProps = Readonly<{
 type TaskFilter = "All" | TaskStatus;
 type ViewMode = "kanban" | "grid";
 type PriorityFilter = "All" | TaskPriority;
+type TagFilter = "All" | TaskTag;
 
 const taskFilterOptions: readonly TaskFilter[] = [
   "All",
@@ -40,6 +46,16 @@ const priorityOptions: readonly PriorityFilter[] = [
   "High",
   "Medium",
   "Low",
+];
+
+const tagOptions: readonly TagFilter[] = [
+  "All",
+  "feature",
+  "bug",
+  "frontend",
+  "backend",
+  "security",
+  "infra",
 ];
 
 const kanbanColumns: readonly {
@@ -87,6 +103,7 @@ export function ProjectTasksView({
   const [selectedAssignee, setSelectedAssignee] = useState<string>("All");
   const [selectedPriority, setSelectedPriority] =
     useState<PriorityFilter>("All");
+  const [selectedTag, setSelectedTag] = useState<TagFilter>("All");
   const [onlyMyTasks, setOnlyMyTasks] = useState(false);
 
   // Form State
@@ -94,6 +111,7 @@ export function ProjectTasksView({
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("Todo");
   const [priority, setPriority] = useState<TaskPriority>("Medium");
+  const [tag, setTag] = useState<TaskTag>("feature");
   const [assigneeName, setAssigneeName] = useState(currentUser.name);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -133,6 +151,7 @@ export function ProjectTasksView({
     formData.append("description", trimmedDesc);
     formData.append("status", status);
     formData.append("priority", priority);
+    formData.append("tag", tag);
     formData.append("assigneeName", trimmedAssignee);
 
     // Optimistic UI update
@@ -143,6 +162,7 @@ export function ProjectTasksView({
       description: trimmedDesc,
       status,
       priority,
+      tag,
       assigneeName: trimmedAssignee,
     };
     setTasks((prev) => [optimisticTask, ...prev]);
@@ -157,6 +177,7 @@ export function ProjectTasksView({
         setDescription("");
         setStatus("Todo");
         setPriority("Medium");
+        setTag("feature");
         setAssigneeName(currentUser.name);
         setIsFormOpen(false);
       }
@@ -177,6 +198,7 @@ export function ProjectTasksView({
     formData.append("description", updatedTask.description);
     formData.append("status", updatedTask.status);
     formData.append("priority", updatedTask.priority);
+    formData.append("tag", updatedTask.tag);
     formData.append("assigneeName", updatedTask.assigneeName);
 
     startTransition(async () => {
@@ -252,6 +274,7 @@ export function ProjectTasksView({
     setSelectedStatus("All");
     setSelectedAssignee("All");
     setSelectedPriority("All");
+    setSelectedTag("All");
     setOnlyMyTasks(false);
   };
 
@@ -260,6 +283,7 @@ export function ProjectTasksView({
     selectedStatus !== "All" ||
     selectedAssignee !== "All" ||
     selectedPriority !== "All" ||
+    selectedTag !== "All" ||
     onlyMyTasks;
 
   // Compound Filter Predicate
@@ -276,14 +300,23 @@ export function ProjectTasksView({
     const matchesPriority =
       selectedPriority === "All" || task.priority === selectedPriority;
 
+    const matchesTag = selectedTag === "All" || task.tag === selectedTag;
+
     const query = searchQuery.trim().toLowerCase();
     const matchesSearch =
       query === "" ||
       task.title.toLowerCase().includes(query) ||
       task.description.toLowerCase().includes(query) ||
+      task.tag.toLowerCase().includes(query) ||
       task.assigneeName.toLowerCase().includes(query);
 
-    return matchesStatus && matchesAssignee && matchesPriority && matchesSearch;
+    return (
+      matchesStatus &&
+      matchesAssignee &&
+      matchesPriority &&
+      matchesTag &&
+      matchesSearch
+    );
   });
 
   return (
@@ -352,10 +385,10 @@ export function ProjectTasksView({
 
       {/* Advanced Filter Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
-        <div className="relative min-w-[180px] flex-1 sm:max-w-xs">
+        <div className="relative min-w-45 flex-1 sm:max-w-xs">
           <input
             type="search"
-            placeholder="Search tasks or assignees..."
+            placeholder="Search tasks, tags, assignees..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 transition hover:border-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
@@ -375,6 +408,20 @@ export function ProjectTasksView({
           <span>👤</span>
           <span>Only My Tasks</span>
         </button>
+
+        {/* Domain Tag Filter */}
+        <select
+          value={selectedTag}
+          onChange={(e) => setSelectedTag(e.target.value as TagFilter)}
+          aria-label="Filter by Tag"
+          className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-300 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 font-mono lowercase"
+        >
+          {tagOptions.map((t) => (
+            <option key={t} value={t}>
+              {t === "All" ? "All Tags" : `#${t}`}
+            </option>
+          ))}
+        </select>
 
         {!onlyMyTasks && (
           <select
@@ -502,7 +549,7 @@ export function ProjectTasksView({
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-4">
               <div>
                 <label
                   htmlFor="task-status"
@@ -515,7 +562,7 @@ export function ProjectTasksView({
                   value={status}
                   disabled={isPending}
                   onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
                 >
                   <option value="Todo">Todo</option>
                   <option value="In Progress">In Progress</option>
@@ -536,12 +583,35 @@ export function ProjectTasksView({
                   value={priority}
                   disabled={isPending}
                   onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
                 >
                   <option value="Low">Low</option>
                   <option value="Medium">Medium</option>
                   <option value="High">High</option>
                   <option value="Urgent">Urgent</option>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="task-tag"
+                  className="block text-xs font-medium text-slate-300"
+                >
+                  Domain Tag
+                </label>
+                <select
+                  id="task-tag"
+                  value={tag}
+                  disabled={isPending}
+                  onChange={(e) => setTag(e.target.value as TaskTag)}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                >
+                  <option value="feature">feature</option>
+                  <option value="bug">bug</option>
+                  <option value="frontend">frontend</option>
+                  <option value="backend">backend</option>
+                  <option value="security">security</option>
+                  <option value="infra">infra</option>
                 </select>
               </div>
 
@@ -557,7 +627,7 @@ export function ProjectTasksView({
                   value={assigneeName}
                   disabled={isPending}
                   onChange={(e) => setAssigneeName(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
                 >
                   {allUsers.map((u) => (
                     <option key={u.id} value={u.name}>

@@ -6,7 +6,7 @@ import { db } from "./db";
 import { getCurrentUser } from "./auth";
 import { logActivity } from "./activity";
 import type { ProjectStatus } from "../projects/types";
-import type { TaskPriority, TaskStatus } from "../tasks/types";
+import type { TaskPriority, TaskStatus, TaskTag } from "../tasks/types";
 
 export type ActionResponse = Readonly<{
   success: boolean;
@@ -81,6 +81,7 @@ export async function createProjectAction(
 
     revalidatePath("/devflow-saas/projects");
     revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
     return { success: true };
   } catch (err: unknown) {
     if (
@@ -124,6 +125,7 @@ export async function deleteProjectAction(
 
     revalidatePath("/devflow-saas/projects");
     revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to delete project from database." };
@@ -141,6 +143,7 @@ export async function createTaskAction(
   const priority =
     (formData.get("priority") as TaskPriority | null) || "Medium";
   const assigneeName = (formData.get("assigneeName") as string | null)?.trim();
+  const tag = (formData.get("tag") as TaskTag | null) || "feature";
 
   if (!projectId || !title || !description || !assigneeName) {
     return { success: false, error: "All fields are required." };
@@ -149,11 +152,20 @@ export async function createTaskAction(
   try {
     const id = `task-${Date.now()}`;
     const stmt = db.prepare(`
-      INSERT INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(id, projectId, title, description, status, priority, assigneeName);
+    stmt.run(
+      id,
+      projectId,
+      title,
+      description,
+      status,
+      priority,
+      assigneeName,
+      tag,
+    );
 
     const projectStmt = db.prepare(
       "SELECT org_id FROM devflow_projects WHERE id = ?",
@@ -169,12 +181,13 @@ export async function createTaskAction(
         currentUser.name,
         "created_task",
         title,
-        `Assigned to ${assigneeName} (${priority} priority).`,
+        `[${tag.toUpperCase()}] Assigned to ${assigneeName} (${priority} priority).`,
       );
     }
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
     revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to create task in database." };
@@ -193,6 +206,7 @@ export async function updateTaskAction(
   const priority =
     (formData.get("priority") as TaskPriority | null) || "Medium";
   const assigneeName = (formData.get("assigneeName") as string | null)?.trim();
+  const tag = (formData.get("tag") as TaskTag | null) || "feature";
 
   if (!taskId || !projectId || !title || !description || !assigneeName) {
     return { success: false, error: "All fields are required." };
@@ -201,11 +215,11 @@ export async function updateTaskAction(
   try {
     const stmt = db.prepare(`
       UPDATE devflow_tasks
-      SET title = ?, description = ?, status = ?, priority = ?, assignee_name = ?
+      SET title = ?, description = ?, status = ?, priority = ?, assignee_name = ?, tag = ?
       WHERE id = ?
     `);
 
-    stmt.run(title, description, status, priority, assigneeName, taskId);
+    stmt.run(title, description, status, priority, assigneeName, tag, taskId);
 
     const projectStmt = db.prepare(
       "SELECT org_id FROM devflow_projects WHERE id = ?",
@@ -221,12 +235,13 @@ export async function updateTaskAction(
         currentUser.name,
         "updated_task",
         title,
-        `Details updated: ${status}, ${priority} priority, assigned to ${assigneeName}.`,
+        `[${tag.toUpperCase()}] Updated: ${status}, ${priority} priority, assigned to ${assigneeName}.`,
       );
     }
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
     revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to update task in database." };
@@ -271,6 +286,7 @@ export async function updateTaskStatusAction(
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
     revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to update task status." };
@@ -309,6 +325,7 @@ export async function deleteTaskAction(
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
     revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to delete task from database." };

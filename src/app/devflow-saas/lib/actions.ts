@@ -35,7 +35,6 @@ export async function createProjectAction(
 
     stmt.run(id, name, key, description, status);
 
-    // Revalidate projects route cache
     revalidatePath("/devflow-saas/projects");
     return { success: true };
   } catch (err: unknown) {
@@ -49,6 +48,20 @@ export async function createProjectAction(
       };
     }
     return { success: false, error: "Failed to create project in database." };
+  }
+}
+
+export async function deleteProjectAction(
+  projectId: string,
+): Promise<ActionResponse> {
+  try {
+    const stmt = db.prepare("DELETE FROM devflow_projects WHERE id = ?");
+    stmt.run(projectId);
+
+    revalidatePath("/devflow-saas/projects");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to delete project from database." };
   }
 }
 
@@ -76,7 +89,6 @@ export async function createTaskAction(
 
     stmt.run(id, projectId, title, description, status, priority, assigneeName);
 
-    // Revalidate project detail route cache
     revalidatePath(`/devflow-saas/projects/${projectId}`);
     return { success: true };
   } catch {
@@ -102,5 +114,20 @@ export async function updateTaskStatusAction(
     return { success: true };
   } catch {
     return { success: false, error: "Failed to update task status." };
+  }
+}
+
+export async function deleteTaskAction(
+  taskId: string,
+  projectId: string,
+): Promise<ActionResponse> {
+  try {
+    const stmt = db.prepare("DELETE FROM devflow_tasks WHERE id = ?");
+    stmt.run(taskId);
+
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to delete task from database." };
   }
 }

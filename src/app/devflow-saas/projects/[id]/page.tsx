@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getProjectById, getTasksByProjectId } from "../../lib/queries";
+import { getCurrentUser, getAllUsers } from "../../lib/auth";
 import type { ProjectStatus } from "../types";
 import { ProjectTasksView } from "./ProjectTasksView";
 
@@ -18,8 +19,12 @@ export default async function ProjectDetailPage({
 }: ProjectDetailPageProps) {
   const { id } = await params;
 
-  // Real database queries from SQLite
-  const project = getProjectById(id);
+  // Real database & session queries
+  const [project, currentUser, allUsers] = await Promise.all([
+    getProjectById(id),
+    getCurrentUser(),
+    getAllUsers(),
+  ]);
 
   if (!project) {
     return (
@@ -81,8 +86,13 @@ export default async function ProjectDetailPage({
           </p>
         </header>
 
-        {/* Real SQLite Tasks */}
-        <ProjectTasksView projectId={project.id} initialTasks={projectTasks} />
+        {/* Real SQLite Tasks with Active Session User */}
+        <ProjectTasksView
+          projectId={project.id}
+          initialTasks={projectTasks}
+          currentUser={currentUser}
+          allUsers={allUsers}
+        />
       </div>
     </main>
   );

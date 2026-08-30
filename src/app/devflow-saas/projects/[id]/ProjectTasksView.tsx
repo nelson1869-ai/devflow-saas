@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { Task, TaskPriority, TaskStatus } from "../../tasks/types";
+import type { User } from "../../lib/auth";
 import { TaskCard } from "../../tasks/TaskCard";
 import {
   createTaskAction,
@@ -12,6 +13,8 @@ import {
 type ProjectTasksViewProps = Readonly<{
   projectId: string;
   initialTasks: readonly Task[];
+  currentUser: User;
+  allUsers: readonly User[];
 }>;
 
 type TaskFilter = "All" | TaskStatus;
@@ -51,6 +54,8 @@ const kanbanColumns: readonly {
 export function ProjectTasksView({
   projectId,
   initialTasks,
+  currentUser,
+  allUsers,
 }: ProjectTasksViewProps) {
   const [tasks, setTasks] = useState<readonly Task[]>(initialTasks);
   const [selectedStatus, setSelectedStatus] = useState<TaskFilter>("All");
@@ -58,12 +63,12 @@ export function ProjectTasksView({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Form State
+  // Form State (Default assignee to current logged-in user)
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("Todo");
   const [priority, setPriority] = useState<TaskPriority>("Medium");
-  const [assigneeName, setAssigneeName] = useState("");
+  const [assigneeName, setAssigneeName] = useState(currentUser.name);
   const [formError, setFormError] = useState<string | null>(null);
 
   // Synchronize tasks when server revalidates
@@ -118,14 +123,13 @@ export function ProjectTasksView({
         setDescription("");
         setStatus("Todo");
         setPriority("Medium");
-        setAssigneeName("");
+        setAssigneeName(currentUser.name);
         setIsFormOpen(false);
       }
     });
   };
 
   const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
-    // Instant optimistic update
     setTasks((prev) =>
       prev.map((task) =>
         task.id === taskId ? { ...task, status: newStatus } : task,
@@ -146,7 +150,6 @@ export function ProjectTasksView({
     );
     if (!confirmed) return;
 
-    // Optimistic removal from UI
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
 
     startTransition(async () => {
@@ -237,7 +240,10 @@ export function ProjectTasksView({
 
           <button
             type="button"
-            onClick={() => setIsFormOpen((prev) => !prev)}
+            onClick={() => {
+              setAssigneeName(currentUser.name);
+              setIsFormOpen((prev) => !prev);
+            }}
             className={[
               "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
               "focus-visible:outline-2 focus-visible:outline-cyan-400",
@@ -354,18 +360,21 @@ export function ProjectTasksView({
                   htmlFor="task-assignee"
                   className="block text-xs font-medium text-slate-300"
                 >
-                  Assignee Name
+                  Assignee
                 </label>
-                <input
+                <select
                   id="task-assignee"
-                  type="text"
-                  required
-                  disabled={isPending}
-                  placeholder="e.g. Alex Rivera"
                   value={assigneeName}
+                  disabled={isPending}
                   onChange={(e) => setAssigneeName(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
-                />
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                >
+                  {allUsers.map((u) => (
+                    <option key={u.id} value={u.name}>
+                      {u.name} {u.id === currentUser.id ? "(You)" : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 

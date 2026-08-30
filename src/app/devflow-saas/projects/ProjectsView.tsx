@@ -2,12 +2,14 @@
 
 import { useState, useTransition, type FormEvent } from "react";
 import type { Project, ProjectStatus, FilterOption } from "./types";
+import type { User } from "../lib/auth";
 import { ProjectCard } from "./ProjectCard";
 import { ProjectMetrics } from "./ProjectMetrics";
 import { createProjectAction, deleteProjectAction } from "../lib/actions";
 
 type ProjectsViewProps = Readonly<{
   initialProjects: readonly Project[];
+  currentUser: User;
 }>;
 
 const filterOptions: readonly FilterOption[] = [
@@ -17,7 +19,10 @@ const filterOptions: readonly FilterOption[] = [
   "Completed",
 ];
 
-export function ProjectsView({ initialProjects }: ProjectsViewProps) {
+export function ProjectsView({
+  initialProjects,
+  currentUser,
+}: ProjectsViewProps) {
   const [projects, setProjects] = useState<readonly Project[]>(initialProjects);
   const [selectedFilter, setSelectedFilter] = useState<FilterOption>("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -92,6 +97,11 @@ export function ProjectsView({ initialProjects }: ProjectsViewProps) {
   };
 
   const handleDeleteProject = (projectId: string) => {
+    if (currentUser.role !== "Admin") {
+      alert("Only Workspace Admins can delete projects.");
+      return;
+    }
+
     const confirmed = window.confirm(
       "Are you sure you want to delete this project? All associated tasks in SQLite will also be deleted.",
     );
@@ -364,7 +374,11 @@ export function ProjectsView({ initialProjects }: ProjectsViewProps) {
                 <ProjectCard
                   key={project.id}
                   project={project}
-                  onDelete={handleDeleteProject}
+                  onDelete={
+                    currentUser.role === "Admin"
+                      ? handleDeleteProject
+                      : undefined
+                  }
                 />
               ))}
             </ul>

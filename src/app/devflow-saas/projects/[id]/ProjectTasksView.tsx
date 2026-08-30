@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import type { Task, TaskPriority, TaskStatus } from "../../tasks/types";
 import type { User } from "../../lib/auth";
+import type { TaskComment } from "../../lib/comments";
 import { TaskCard } from "../../tasks/TaskCard";
 import { EditTaskModal } from "../../tasks/EditTaskModal";
 import {
@@ -10,11 +11,13 @@ import {
   updateTaskAction,
   updateTaskStatusAction,
   deleteTaskAction,
+  createCommentAction,
 } from "../../lib/actions";
 
 type ProjectTasksViewProps = Readonly<{
   projectId: string;
   initialTasks: readonly Task[];
+  initialComments: readonly TaskComment[];
   currentUser: User;
   allUsers: readonly User[];
 }>;
@@ -65,10 +68,13 @@ const kanbanColumns: readonly {
 export function ProjectTasksView({
   projectId,
   initialTasks,
+  initialComments,
   currentUser,
   allUsers,
 }: ProjectTasksViewProps) {
   const [tasks, setTasks] = useState<readonly Task[]>(initialTasks);
+  const [comments, setComments] =
+    useState<readonly TaskComment[]>(initialComments);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -91,13 +97,21 @@ export function ProjectTasksView({
   const [assigneeName, setAssigneeName] = useState(currentUser.name);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Synchronize tasks when server revalidates
+  // Synchronize tasks and comments when server revalidates
   if (
     initialTasks !== tasks &&
     !isPending &&
     initialTasks.length > tasks.length
   ) {
     setTasks(initialTasks);
+  }
+
+  if (
+    initialComments !== comments &&
+    !isPending &&
+    initialComments.length > comments.length
+  ) {
+    setComments(initialComments);
   }
 
   const handleCreateTask = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -170,6 +184,33 @@ export function ProjectTasksView({
       if (!res.success) {
         alert(res.error || "Failed to update task.");
         setTasks(initialTasks);
+      }
+    });
+  };
+
+  const handleAddComment = (content: string) => {
+    if (!editingTask) return;
+
+    const optimisticComment: TaskComment = {
+      id: `comm-${Date.now()}`,
+      taskId: editingTask.id,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      content,
+      createdAt: "Just now",
+    };
+    setComments((prev) => [...prev, optimisticComment]);
+
+    const formData = new FormData();
+    formData.append("taskId", editingTask.id);
+    formData.append("projectId", projectId);
+    formData.append("content", content);
+
+    startTransition(async () => {
+      const res = await createCommentAction(formData);
+      if (!res.success) {
+        alert(res.error || "Failed to post comment.");
+        setComments(initialComments);
       }
     });
   };
@@ -598,7 +639,7 @@ export function ProjectTasksView({
                 </div>
 
                 <div className="mt-4 flex-1">
-                  {/* Drop Placeholder Zone when dragging over */}
+                  {/* Drop Placeholder Zone */}
                   {isOverThisColumn && (
                     <div className="mb-3 rounded-xl border-2 border-dashed border-cyan-400/60 bg-cyan-500/10 p-3 text-center text-xs font-semibold text-cyan-300 animate-pulse">
                       Drop here to move to {col.label}
@@ -661,15 +702,18 @@ export function ProjectTasksView({
         </ul>
       )}
 
-      {/* Edit Task Modal */}
+      {/* Edit Task Modal with Discussion Thread */}
       {editingTask && (
         <EditTaskModal
           key={editingTask.id}
           task={editingTask}
           allUsers={allUsers}
+          currentUser={currentUser}
+          comments={comments.filter((c) => c.taskId === editingTask.id)}
           isOpen={Boolean(editingTask)}
           onClose={() => setEditingTask(null)}
           onSave={handleSaveTask}
+          onAddComment={handleAddComment}
           isPending={isPending}
         />
       )}

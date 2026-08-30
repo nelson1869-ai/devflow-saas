@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getProjectById, getTasksByProjectId } from "../../lib/queries";
 import { getCurrentUser, getAllUsers } from "../../lib/auth";
+import { getCommentsByProjectId } from "../../lib/comments";
 import type { ProjectStatus } from "../types";
 import { ProjectTasksView } from "./ProjectTasksView";
 
@@ -49,6 +50,7 @@ export default async function ProjectDetailPage({
   }
 
   const projectTasks = getTasksByProjectId(project.id);
+  const projectComments = getCommentsByProjectId(project.id);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
@@ -86,10 +88,11 @@ export default async function ProjectDetailPage({
           </p>
         </header>
 
-        {/* Real SQLite Tasks with Active Session User */}
+        {/* Real SQLite Tasks with Comments and Session User */}
         <ProjectTasksView
           projectId={project.id}
           initialTasks={projectTasks}
+          initialComments={projectComments}
           currentUser={currentUser}
           allUsers={allUsers}
         />

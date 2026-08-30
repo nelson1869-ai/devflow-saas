@@ -3,30 +3,38 @@
 import { useState, useEffect, type FormEvent } from "react";
 import type { Task, TaskPriority, TaskStatus } from "./types";
 import type { User } from "../lib/auth";
+import type { TaskComment } from "../lib/comments";
 
 type EditTaskModalProps = Readonly<{
   task: Task;
   allUsers: readonly User[];
+  currentUser: User;
+  comments: readonly TaskComment[];
   isOpen: boolean;
   onClose: () => void;
   onSave: (updatedTask: Task) => void;
+  onAddComment: (content: string) => void;
   isPending?: boolean;
 }>;
 
 export function EditTaskModal({
   task,
   allUsers,
+  currentUser,
+  comments,
   isOpen,
   onClose,
   onSave,
+  onAddComment,
   isPending = false,
 }: EditTaskModalProps) {
-  // State initialized directly from props (Zero cascading renders)
+  // State initialized directly from props (key-based reset)
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [status, setStatus] = useState<TaskStatus>(task.status);
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const [assigneeName, setAssigneeName] = useState(task.assigneeName);
+  const [newComment, setNewComment] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   // Escape key keyboard listener
@@ -67,12 +75,21 @@ export function EditTaskModal({
     });
   };
 
+  const handlePostComment = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const trimmed = newComment.trim();
+    if (!trimmed) return;
+
+    onAddComment(trimmed);
+    setNewComment("");
+  };
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="edit-task-heading"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
     >
       {/* Backdrop */}
       <div
@@ -81,10 +98,10 @@ export function EditTaskModal({
       />
 
       {/* Modal Card */}
-      <div className="relative w-full max-w-lg rounded-2xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl transition-all sm:p-8">
+      <div className="relative my-8 w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl transition-all sm:p-8">
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <h2 id="edit-task-heading" className="text-lg font-bold text-white">
-            Edit Task Details
+            Task Details & Discussion
           </h2>
           <button
             type="button"
@@ -105,6 +122,7 @@ export function EditTaskModal({
           </div>
         )}
 
+        {/* Task Edit Form */}
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label
@@ -133,7 +151,7 @@ export function EditTaskModal({
             </label>
             <textarea
               id="edit-task-desc"
-              rows={3}
+              rows={2}
               required
               disabled={isPending}
               value={description}
@@ -208,23 +226,112 @@ export function EditTaskModal({
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+              className="rounded-lg border border-slate-700 px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isPending}
-              className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-50"
+              className="rounded-lg bg-cyan-400 px-3.5 py-1.5 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-50"
             >
               {isPending ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </form>
+
+        {/* Discussion Stream Section */}
+        <section
+          aria-labelledby="discussion-heading"
+          className="mt-6 border-t border-slate-800 pt-6"
+        >
+          <div className="flex items-center gap-2">
+            <h3
+              id="discussion-heading"
+              className="text-xs font-bold uppercase tracking-wider text-slate-300"
+            >
+              Team Discussion & Notes
+            </h3>
+            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">
+              {comments.length}
+            </span>
+          </div>
+
+          {/* Comments List */}
+          <div className="mt-4 space-y-3">
+            {comments.length === 0 ? (
+              <p className="text-xs text-slate-500 italic">
+                No discussion notes yet. Leave an update for your team below.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {comments.map((comm) => {
+                  const initials = comm.userName
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .toUpperCase();
+
+                  return (
+                    <li
+                      key={comm.id}
+                      className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            aria-hidden="true"
+                            className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-[10px] font-bold text-slate-200"
+                          >
+                            {initials}
+                          </span>
+                          <span className="text-xs font-semibold text-white">
+                            {comm.userName}
+                          </span>
+                        </div>
+                        <time className="text-[10px] text-slate-500">
+                          {comm.createdAt}
+                        </time>
+                      </div>
+
+                      <p className="mt-2 text-xs leading-relaxed text-slate-300 whitespace-pre-wrap">
+                        {comm.content}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* Add Comment Input */}
+          <form onSubmit={handlePostComment} className="mt-4">
+            <label htmlFor="new-comment" className="sr-only">
+              Add a note or comment
+            </label>
+            <textarea
+              id="new-comment"
+              rows={2}
+              placeholder={`Leave a comment as ${currentUser.name}...`}
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+            />
+            <div className="mt-2 flex justify-end">
+              <button
+                type="submit"
+                disabled={!newComment.trim() || isPending}
+                className="rounded-lg bg-cyan-400 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-40 transition"
+              >
+                Post Comment
+              </button>
+            </div>
+          </form>
+        </section>
       </div>
     </div>
   );

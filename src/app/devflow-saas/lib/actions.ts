@@ -314,3 +314,53 @@ export async function deleteTaskAction(
     return { success: false, error: "Failed to delete task from database." };
   }
 }
+
+export async function createCommentAction(
+  formData: FormData,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  const taskId = (formData.get("taskId") as string | null)?.trim();
+  const projectId = (formData.get("projectId") as string | null)?.trim();
+  const content = (formData.get("content") as string | null)?.trim();
+
+  if (!taskId || !projectId || !content) {
+    return { success: false, error: "Comment content cannot be empty." };
+  }
+
+  try {
+    const id = `comm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const stmt = db.prepare(`
+      INSERT INTO devflow_comments (id, task_id, user_id, user_name, content)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(id, taskId, currentUser.id, currentUser.name, content);
+
+    const taskStmt = db.prepare("SELECT title FROM devflow_tasks WHERE id = ?");
+    const task = taskStmt.get(taskId) as { title: string } | undefined;
+
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    if (project && task) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "updated_task",
+        task.title,
+        `Added note: "${content.slice(0, 50)}${content.length > 50 ? "..." : ""}"`,
+      );
+    }
+
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/activity");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to save comment to database." };
+  }
+}

@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useTransition, useMemo, type FormEvent } from "react";
+import {
+  useState,
+  useTransition,
+  useMemo,
+  useEffect,
+  type FormEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import type { Project, ProjectStatus } from "../types";
 import type { Task } from "../../tasks/types";
@@ -63,6 +69,15 @@ export function ProjectSettingsView({
     null,
   );
   const [isPending, startTransition] = useTransition();
+
+  // Auto-dismiss updatedSummary banner after 6 seconds
+  useEffect(() => {
+    if (!updatedSummary) return;
+    const timer = setTimeout(() => {
+      setUpdatedSummary(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [updatedSummary]);
 
   // AI Sprint Copilot State
   const [aiPhasePrompt, setAiPhasePrompt] = useState("");
@@ -292,10 +307,6 @@ export function ProjectSettingsView({
           onProjectUpdated(updatedProject);
         }
 
-        setFeedback({
-          type: "success",
-          message: "Project settings successfully updated in SQLite database!",
-        });
         router.refresh();
       } else {
         setFeedback({
@@ -491,10 +502,10 @@ ${inProgressList || "_No tasks currently in flight._"}
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
-      {/* Live Updated Summary Card */}
+      {/* Live Auto-Dismissing Updated Summary Card */}
       {updatedSummary && (
-        <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5 space-y-4 shadow-lg animate-in fade-in duration-200">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-emerald-500/20 pb-3">
+        <div className="relative rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5 space-y-4 shadow-lg animate-in fade-in duration-200">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-emerald-500/20 pb-3 pr-8">
             <div className="flex items-center gap-2.5">
               <span className="text-xl">✅</span>
               <div>
@@ -517,6 +528,16 @@ ${inProgressList || "_No tasks currently in flight._"}
               </button>
             )}
           </div>
+
+          {/* Close Button */}
+          <button
+            type="button"
+            onClick={() => setUpdatedSummary(null)}
+            className="absolute top-4 right-4 rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-emerald-500/20 transition"
+            aria-label="Dismiss notification"
+          >
+            ✕
+          </button>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs">
             <div className="rounded-xl border border-emerald-500/20 bg-slate-950/60 p-2.5">

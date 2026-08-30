@@ -75,6 +75,20 @@ database.exec(`
     FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS devflow_notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    org_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'assignment',
+    link_url TEXT NOT NULL,
+    is_read INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE,
+    FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS devflow_activity (
     id TEXT PRIMARY KEY,
     org_id TEXT NOT NULL,
@@ -138,7 +152,7 @@ database.exec(`
 
   -- Seed Tasks (Acme Engineering)
   INSERT OR IGNORE INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date) VALUES
-    ('task-101', 'proj-1', 'Implement JWT Session Verification', 'Validate session cookies and decode tenant claims in middleware.', 'In Progress', 'High', 'Nelson Rivera', 'security', date('now', '+3 days')),
+    ('task-101', 'proj-1', 'Implement JWT Session Verification', 'Validate session cookies in middleware:&#10;- [x] Decode RSA public key&#10;- [ ] Check tenant claims and permissions&#10;- [ ] Verify expired token handling', 'In Progress', 'High', 'Nelson Rivera', 'security', date('now', '+3 days')),
     ('task-102', 'proj-1', 'Configure Redis Rate Limiter', 'Apply 100 req/min bucket per API key for external traffic.', 'Todo', 'Urgent', 'Devin Zhao', 'backend', date('now')),
     ('task-103', 'proj-1', 'Database Isolation Unit Tests', 'Write integration tests ensuring zero data leak across organizations.', 'Review', 'Medium', 'Sarah Connor', 'infra', date('now', '-2 days')),
     ('task-201', 'proj-2', 'Design Telemetry Chart Wireframes', 'Draft Figma components for latency percentiles and error rates.', 'In Progress', 'Medium', 'Sarah Connor', 'frontend', date('now', '+7 days'));
@@ -162,6 +176,13 @@ database.exec(`
     ('comm-2', 'task-101', 'user-1', 'Nelson Rivera', 'Thanks Sarah! Adding unit tests for tenant claims decoding now.', datetime('now', '-10 minutes')),
     ('comm-3', 'task-102', 'user-1', 'Nelson Rivera', 'We should use Redis token bucket algorithm with a 60-second window.', datetime('now', '-45 minutes'));
 
+  -- Seed Notifications (Acme Engineering)
+  INSERT OR IGNORE INTO devflow_notifications (id, user_id, org_id, title, message, type, link_url, is_read, created_at) VALUES
+    ('notif-1', 'user-1', 'org-1', 'New Comment on your Task', 'Sarah Connor commented on "Implement JWT Session Verification"', 'comment', '/devflow-saas/projects/proj-1', 0, datetime('now', '-15 minutes')),
+    ('notif-2', 'user-1', 'org-1', 'Task Assigned to You', 'You were assigned to lead Platform Core APIs authentication deliverables.', 'assignment', '/devflow-saas/projects/proj-1', 0, datetime('now', '-1 hour')),
+    ('notif-3', 'user-1', 'org-1', 'Task Status Moved', 'Database Isolation Unit Tests moved to Review stage.', 'status', '/devflow-saas/projects/proj-1', 0, datetime('now', '-2 hours')),
+    ('notif-4', 'user-2', 'org-1', 'Task Assigned', 'You were assigned to Database Isolation Unit Tests.', 'assignment', '/devflow-saas/projects/proj-1', 0, datetime('now', '-3 hours'));
+
   -- Seed Activity Log
   INSERT OR IGNORE INTO devflow_activity (id, org_id, project_id, user_name, action, entity_title, details, created_at) VALUES
     ('act-1', 'org-1', 'proj-1', 'Nelson Rivera', 'created_project', 'Platform Core APIs', 'Initial project repository established.', datetime('now', '-2 hours')),
@@ -173,4 +194,4 @@ database.exec(`
 
 database.close();
 
-console.log("DevFlow database schema with task due dates is ready.");
+console.log("DevFlow database schema with notifications is ready.");

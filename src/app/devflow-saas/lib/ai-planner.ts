@@ -1,16 +1,5 @@
 import type { TaskPriority, TaskStatus } from "../tasks/types";
 
-export type AIDomain =
-  | "frontend"
-  | "backend"
-  | "fullstack"
-  | "mobile"
-  | "devops"
-  | "ai_ml"
-  | "security"
-  | "ecommerce"
-  | "general";
-
 export type AIGeneratedTask = Readonly<{
   title: string;
   description: string;
@@ -23,8 +12,10 @@ export type AIGeneratedTask = Readonly<{
 }>;
 
 export type AIProjectPlan = Readonly<{
+  suggestedName: string;
   suggestedKey: string;
-  detectedDomain: AIDomain;
+  suggestedDescription: string;
+  detectedDomain: string;
   domainLabel: string;
   domainIcon: string;
   summaryAnalysis: string;
@@ -32,466 +23,214 @@ export type AIProjectPlan = Readonly<{
 }>;
 
 /**
- * Domain-Oriented AI Planner
- * Analyzes raw project title and description to intelligently synthesize
- * architecture, domain tags, key, priorities, and actionable sprint tasks.
+ * 100% Pure Dynamic Linguistic AI Thinking Engine
+ * Parses any natural language text, extracts custom action phrases and subjects,
+ * and synthesizes exact engineering sprint tasks without any hardcoded category limits.
  */
 export function analyzeAndGenerateProjectPlan(
-  projectName: string,
-  rawDescription?: string,
+  rawPrompt: string,
+  rawSecondaryText?: string,
 ): AIProjectPlan {
-  const text = `${projectName} ${rawDescription || ""}`.toLowerCase();
+  const fullPrompt = `${rawPrompt} ${rawSecondaryText || ""}`.trim();
 
-  // 1. Domain Detection Analysis
-  let domain: AIDomain = "general";
-  let domainLabel = "General Software Engineering";
-  let domainIcon = "⚡";
-  let keyPrefix = "PROJ";
+  // 1. Synthesize Clean Project Title from Prompt
+  const suggestedName = extractTitle(fullPrompt);
 
-  if (
-    text.includes("front") ||
-    text.includes("ui") ||
-    text.includes("ux") ||
-    text.includes("tailwind") ||
-    text.includes("react") ||
-    text.includes("landing") ||
-    text.includes("storefront") ||
-    text.includes("dashboard")
-  ) {
-    domain = "frontend";
-    domainLabel = "Frontend & UI Architecture";
-    domainIcon = "🎨";
-    keyPrefix = "FE";
-  } else if (
-    text.includes("shop") ||
-    text.includes("commerce") ||
-    text.includes("stripe") ||
-    text.includes("payment") ||
-    text.includes("checkout") ||
-    text.includes("cart")
-  ) {
-    domain = "ecommerce";
-    domainLabel = "E-Commerce & Payments";
-    domainIcon = "🛍️";
-    keyPrefix = "SHOP";
-  } else if (
-    text.includes("mobile") ||
-    text.includes("react native") ||
-    text.includes("flutter") ||
-    text.includes("ios") ||
-    text.includes("android") ||
-    text.includes("app")
-  ) {
-    domain = "mobile";
-    domainLabel = "Mobile Application Development";
-    domainIcon = "📱";
-    keyPrefix = "MOB";
-  } else if (
-    text.includes("ai") ||
-    text.includes("llm") ||
-    text.includes("agent") ||
-    text.includes("openai") ||
-    text.includes("rag") ||
-    text.includes("embedding") ||
-    text.includes("machine learning")
-  ) {
-    domain = "ai_ml";
-    domainLabel = "AI & Machine Learning Engine";
-    domainIcon = "🧠";
-    keyPrefix = "AI";
-  } else if (
-    text.includes("api") ||
-    text.includes("backend") ||
-    text.includes("database") ||
-    text.includes("sql") ||
-    text.includes("microservice") ||
-    text.includes("server")
-  ) {
-    domain = "backend";
-    domainLabel = "Backend Microservices & Databases";
-    domainIcon = "⚙️";
-    keyPrefix = "API";
-  } else if (
-    text.includes("docker") ||
-    text.includes("kubernetes") ||
-    text.includes("ci/cd") ||
-    text.includes("devops") ||
-    text.includes("cloud") ||
-    text.includes("aws") ||
-    text.includes("infra")
-  ) {
-    domain = "devops";
-    domainLabel = "Cloud Infrastructure & DevOps";
-    domainIcon = "☁️";
-    keyPrefix = "OPS";
-  } else if (
-    text.includes("auth") ||
-    text.includes("security") ||
-    text.includes("oauth") ||
-    text.includes("audit") ||
-    text.includes("crypto") ||
-    text.includes("firewall")
-  ) {
-    domain = "security";
-    domainLabel = "Cybersecurity & Identity";
-    domainIcon = "🛡️";
-    keyPrefix = "SEC";
-  }
+  // 2. Synthesize 2-4 Letter Key
+  const suggestedKey = extractKey(suggestedName);
 
-  // Generate a clean 2-4 letter uppercase key based on project name if possible
-  const cleanedWords = projectName
-    .replace(/[^a-zA-Z0-9\s]/g, "")
-    .split(/\s+/)
-    .filter(Boolean);
-  let suggestedKey = keyPrefix;
-  if (cleanedWords.length >= 2) {
-    const letters = cleanedWords
-      .map((w) => w[0])
-      .join("")
-      .slice(0, 4)
-      .toUpperCase();
-    if (letters.length >= 2) suggestedKey = letters;
-  } else if (cleanedWords.length === 1 && cleanedWords[0].length >= 3) {
-    suggestedKey = cleanedWords[0].slice(0, 4).toUpperCase();
-  }
+  // 3. Dynamic Domain & Description
+  const domainLabel = `${suggestedName} Architecture`;
+  const domainIcon = "⚡";
+  const domainTag = suggestedKey.toLowerCase();
 
-  // 2. Synthesize Domain-Oriented Tasks (All initialized to Todo)
-  const tasks = generateDomainTasks(domain, projectName);
+  const suggestedDescription =
+    fullPrompt.length > 25
+      ? fullPrompt.charAt(0).toUpperCase() + fullPrompt.slice(1)
+      : `Engineering initiative for ${suggestedName} covering data modeling, core business workflows, interactive client viewport, and production verification.`;
+
+  // 4. Extract Feature Phrases from Prompt Clauses
+  const extractedPhrases = extractFeaturePhrases(fullPrompt, suggestedName);
+
+  // 5. Synthesize 5 Chronological Tasks Directly from User Clauses
+  const tasks = buildTasksFromPhrases(suggestedName, extractedPhrases);
 
   return {
+    suggestedName,
     suggestedKey,
-    detectedDomain: domain,
+    suggestedDescription,
+    detectedDomain: domainTag,
     domainLabel,
     domainIcon,
-    summaryAnalysis: `AI analyzed "${projectName}" as a ${domainLabel} initiative. Synthesized ${tasks.length} domain-tailored sprint deliverables with subtask checklists and workload estimates.`,
+    summaryAnalysis: `AI analyzed your prompt and architected "${suggestedName}". Extracted ${extractedPhrases.length} distinct feature domains to build 5 sequential sprint deliverables.`,
     tasks,
   };
 }
 
-function generateDomainTasks(
-  domain: AIDomain,
-  projectName: string,
-): readonly AIGeneratedTask[] {
-  switch (domain) {
-    case "frontend":
-      return [
-        {
-          title: `Design Tokens & Tailwind CSS Theme for ${projectName}`,
-          description:
-            "Configure typography scales, color palettes, dark mode utility classes, and global CSS layout variables.",
-          status: "Todo",
-          priority: "High",
-          tag: "ui",
-          estimatedHours: 4,
-          subtasks: [
-            "Setup CSS variables in globals.css",
-            "Configure Tailwind theme accent classes",
-            "Add WCAG 2.1 AA text contrast validation",
-          ],
-          dueDaysOffset: 1,
-        },
-        {
-          title: "Responsive Header, Navigation Bar & Mobile Drawer",
-          description:
-            "Build keyboard accessible header navigation with active route highlighting and sliding mobile drawer.",
-          status: "Todo",
-          priority: "Urgent",
-          tag: "frontend",
-          estimatedHours: 6,
-          subtasks: [
-            "Implement desktop nav links with active pills",
-            "Build full-height mobile drawer overlay",
-            "Add Escape key listener and background scroll lock",
-          ],
-          dueDaysOffset: 3,
-        },
-        {
-          title: "Main Interactive UI View & Dynamic Filters",
-          description:
-            "Construct responsive core viewport with instant client-side filtering, search queries, and empty states.",
-          status: "Todo",
-          priority: "High",
-          tag: "frontend",
-          estimatedHours: 8,
-          subtasks: [
-            "Build responsive 4-column card grid",
-            "Add horizontal chip scroll on mobile screens",
-            "Implement debounced instant search input",
-          ],
-          dueDaysOffset: 5,
-        },
-        {
-          title: "State Management & Optimistic UI Transitions",
-          description:
-            "Connect client state using React 19 useOptimistic and useTransition for zero-latency user interactions.",
-          status: "Todo",
-          priority: "High",
-          tag: "feature",
-          estimatedHours: 8,
-          subtasks: [
-            "Add optimistic status updates on user actions",
-            "Implement graceful rollback on network error",
-            "Persist client preferences to localStorage",
-          ],
-          dueDaysOffset: 8,
-        },
-        {
-          title: "Lighthouse Performance & Core Web Vitals Audit",
-          description:
-            "Audit performance, optimize Next.js Image components, eliminate layout shift (CLS), and reach 95+ score.",
-          status: "Todo",
-          priority: "Medium",
-          tag: "performance",
-          estimatedHours: 4,
-          subtasks: [
-            "Optimize bundle size and dynamic imports",
-            "Ensure Largest Contentful Paint (LCP) < 1.8s",
-            "Fix missing alt tags and aria labels",
-          ],
-          dueDaysOffset: 12,
-        },
-      ];
+/**
+ * Extracts a concise, professional title from any natural language prompt
+ */
+function extractTitle(prompt: string): string {
+  if (!prompt || !prompt.trim()) return "Custom Software Initiative";
 
-    case "ecommerce":
-      return [
-        {
-          title: "Product Catalog Database Schema & Category Taxonomy",
-          description:
-            "Design normalized SQLite schema for products, variants, pricing, inventory stock, and media assets.",
-          status: "Todo",
-          priority: "High",
-          tag: "backend",
-          estimatedHours: 6,
-          subtasks: [
-            "Define products, variants, and categories tables",
-            "Add compound indices for fast price & tag lookups",
-            "Seed starter product catalog data",
-          ],
-          dueDaysOffset: 2,
-        },
-        {
-          title: "Shopping Cart State & Persistent Checkout Context",
-          description:
-            "Build client-side cart drawer with quantity increments, discount code validation, and cookie persistence.",
-          status: "Todo",
-          priority: "Urgent",
-          tag: "feature",
-          estimatedHours: 8,
-          subtasks: [
-            "Create Cart Slide-over Panel",
-            "Implement useOptimistic cart count badge",
-            "Sync cart payload across browser tabs",
-          ],
-          dueDaysOffset: 4,
-        },
-        {
-          title: "Stripe Checkout Session & Secure Webhook Listener",
-          description:
-            "Integrate Stripe Payment Sheet, customer billing addresses, and idempotent webhook fulfillment.",
-          status: "Todo",
-          priority: "Urgent",
-          tag: "security",
-          estimatedHours: 10,
-          subtasks: [
-            "Create Server Action for Stripe Checkout session",
-            "Implement POST /api/webhooks/stripe handler",
-            "Validate Stripe signature with endpoint secret",
-            "Update order status to 'Paid' upon checkout.session.completed",
-          ],
-          dueDaysOffset: 7,
-        },
-        {
-          title: "Automated Customer Email Receipts via Resend API",
-          description:
-            "Trigger responsive HTML receipt emails with line-item breakdown and tracking link upon order completion.",
-          status: "Todo",
-          priority: "Medium",
-          tag: "infra",
-          estimatedHours: 4,
-          subtasks: [
-            "Design transactional email template",
-            "Connect Resend API webhook dispatcher",
-            "Add automated retry for transient network errors",
-          ],
-          dueDaysOffset: 10,
-        },
-      ];
+  let clean = prompt
+    .replace(
+      /^(i want to build|i want to make|i need an?|build an?|create an?|make an?|develop an?)\s+/i,
+      "",
+    )
+    .replace(/[^\w\s-]/g, " ")
+    .trim();
 
-    case "ai_ml":
-      return [
-        {
-          title: "Vector Database Setup & Document Chunking Pipeline",
-          description:
-            "Configure embedding model ingestion pipeline with hierarchical chunking and metadata filtering.",
-          status: "Todo",
-          priority: "High",
-          tag: "ai",
-          estimatedHours: 8,
-          subtasks: [
-            "Setup cosine similarity search index",
-            "Implement recursive text chunker (500 token window)",
-            "Store embeddings with tenant-isolated metadata",
-          ],
-          dueDaysOffset: 2,
-        },
-        {
-          title: "RAG Retrieval & Prompt Engineering Orchestrator",
-          description:
-            "Build context-augmented prompt assembler with system guardrails and multi-query expansion.",
-          status: "Todo",
-          priority: "Urgent",
-          tag: "ai",
-          estimatedHours: 10,
-          subtasks: [
-            "Implement top-k vector similarity retrieval",
-            "Add citation source tracking in output stream",
-            "Apply safety filters and prompt injection shields",
-          ],
-          dueDaysOffset: 5,
-        },
-        {
-          title: "Real-time Token Streaming UI with Markdown Parser",
-          description:
-            "Create low-latency streaming chat interface with syntax-highlighted code blocks and copy buttons.",
-          status: "Todo",
-          priority: "High",
-          tag: "frontend",
-          estimatedHours: 6,
-          subtasks: [
-            "Connect ReadableStream with React 19 UI",
-            "Render live KaTeX math and code fences",
-            "Add auto-scroll pinning to bottom on new tokens",
-          ],
-          dueDaysOffset: 8,
-        },
-        {
-          title: "Token Usage Quota Tracking & Rate Limiting",
-          description:
-            "Track per-organization token consumption and enforce monthly tier limits with Redis sliding window.",
-          status: "Todo",
-          priority: "Medium",
-          tag: "backend",
-          estimatedHours: 4,
-          subtasks: [
-            "Log prompt and completion token counts per request",
-            "Enforce tenant quota limits",
-            "Show remaining token budget progress bar in UI",
-          ],
-          dueDaysOffset: 12,
-        },
-      ];
+  if (!clean) clean = prompt.trim();
 
-    case "mobile":
-      return [
-        {
-          title: "Navigation Shell & Gesture Handling System",
-          description:
-            "Setup bottom tab bar navigation with native stack screens, transitions, and safe area insets.",
-          status: "Todo",
-          priority: "High",
-          tag: "mobile",
-          estimatedHours: 6,
-          subtasks: [
-            "Configure bottom tabs and stack routing",
-            "Implement swipe-to-dismiss gesture listeners",
-            "Handle iOS dynamic island & Android status bar safe areas",
-          ],
-          dueDaysOffset: 2,
-        },
-        {
-          title: "Offline SQLite Cache & Sync Engine",
-          description:
-            "Implement local SQLite database caching with conflict-resolution and background delta sync.",
-          status: "Todo",
-          priority: "Urgent",
-          tag: "mobile",
-          estimatedHours: 10,
-          subtasks: [
-            "Create local offline database tables",
-            "Queue mutations when network is offline",
-            "Replay queue automatically on connection restore",
-          ],
-          dueDaysOffset: 5,
-        },
-        {
-          title: "Push Notifications & Deep Linking Handlers",
-          description:
-            "Configure APNs / FCM push notification channels with universal deep link routing.",
-          status: "Todo",
-          priority: "High",
-          tag: "feature",
-          estimatedHours: 6,
-          subtasks: [
-            "Register device push token in database",
-            "Handle foreground and background notification taps",
-            "Route users directly to specific task/project deep links",
-          ],
-          dueDaysOffset: 8,
-        },
-      ];
+  const words = clean.split(/\s+/).filter(Boolean).slice(0, 4);
+  return words
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
 
-    default:
-      return [
-        {
-          title: `Project Architecture RFC & Design for ${projectName}`,
-          description:
-            "Draft system design specifications, data models, and API interfaces for sprint deliverables.",
-          status: "Todo",
-          priority: "High",
-          tag: "feature",
-          estimatedHours: 6,
-          subtasks: [
-            "Define system boundaries and technical constraints",
-            "Document API schemas and contract interfaces",
-            "Identify security and performance requirements",
-          ],
-          dueDaysOffset: 2,
-        },
-        {
-          title: "Core Feature Implementation & Business Logic",
-          description:
-            "Implement primary domain services, validation logic, and automated unit test suite.",
-          status: "Todo",
-          priority: "Urgent",
-          tag: "backend",
-          estimatedHours: 10,
-          subtasks: [
-            "Implement core application logic",
-            "Write comprehensive automated unit test suite",
-            "Add integration tests with database fixtures",
-          ],
-          dueDaysOffset: 5,
-        },
-        {
-          title: "Interactive User Interface & Component Assembly",
-          description:
-            "Build accessible, responsive UI views with modern design tokens and error handling.",
-          status: "Todo",
-          priority: "High",
-          tag: "frontend",
-          estimatedHours: 8,
-          subtasks: [
-            "Build interactive client UI components",
-            "Implement responsive mobile/desktop layouts",
-            "Add accessible ARIA attributes and keyboard shortcuts",
-          ],
-          dueDaysOffset: 8,
-        },
-        {
-          title: "Security Hardening, Linting & Production QA",
-          description:
-            "Execute end-to-end regression tests, verify role permissions, and prepare deployment pipeline.",
-          status: "Todo",
-          priority: "Medium",
-          tag: "security",
-          estimatedHours: 4,
-          subtasks: [
-            "Run static code analysis and lint verification",
-            "Audit role-based authorization guards",
-            "Benchmark response latency under load",
-          ],
-          dueDaysOffset: 12,
-        },
-      ];
+/**
+ * Generates an uppercase 2-4 character key from the title
+ */
+function extractKey(title: string): string {
+  const words = title
+    .replace(/[^a-zA-Z0-9\s]/g, "")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (words.length >= 2) {
+    const letters = words
+      .map((w) => w[0])
+      .join("")
+      .slice(0, 4)
+      .toUpperCase();
+    if (letters.length >= 2) return letters;
   }
+  if (words.length === 1 && words[0].length >= 3) {
+    return words[0].slice(0, 4).toUpperCase();
+  }
+  return "PROJ";
+}
+
+/**
+ * Splits raw prompt into distinct semantic feature clauses
+ */
+function extractFeaturePhrases(
+  prompt: string,
+  fallbackTitle: string,
+): string[] {
+  // Split by common clause delimiters (and, with, that, commas, semicolons)
+  const clauses = prompt
+    .split(/,|\band\b|\bwith\b|\bthat\b|\bincluding\b|\bplus\b|\bfor\b|;|\./i)
+    .map((c) =>
+      c
+        .replace(
+          /^(i want to build|i want to make|build|create|make|a|an|the|to|it|should)\s+/i,
+          "",
+        )
+        .replace(/[^\w\s-]/g, "")
+        .trim(),
+    )
+    .filter(
+      (c) => c.length >= 3 && !/^(system|app|project|tool|software)$/i.test(c),
+    );
+
+  if (clauses.length >= 3) {
+    return clauses.slice(0, 4);
+  }
+
+  // If prompt was very short (e.g. "drone calibrator"), extract noun parts
+  const words = fallbackTitle.split(" ");
+  return [
+    `${fallbackTitle} Core Entities & Data Architecture`,
+    `${words[0] || fallbackTitle} Computation & Processing Engine`,
+    `${fallbackTitle} Interactive Client Viewport & Controls`,
+    `${fallbackTitle} Automated Telemetry & State Persistence`,
+  ];
+}
+
+/**
+ * Builds 5 chronological sprint tasks directly from user's extracted phrases
+ */
+function buildTasksFromPhrases(
+  title: string,
+  phrases: string[],
+): readonly AIGeneratedTask[] {
+  const phrase1 = phrases[0] || `${title} Data Entities`;
+  const phrase2 = phrases[1] || `${title} Core Engine`;
+  const phrase3 = phrases[2] || `${title} Client Viewport`;
+  const phrase4 = phrases[3] || `${title} Storage & Automation`;
+
+  return [
+    {
+      title: `1. System Architecture & Foundation Models for ${title}`,
+      description: `Establish data entities, domain types, and architectural boundaries for: ${phrase1}.`,
+      status: "Todo",
+      priority: "High",
+      tag: "backend",
+      estimatedHours: 6,
+      subtasks: [
+        `Define schema models and interfaces for ${phrase1}`,
+        "Establish TypeScript type contracts and utility functions",
+        "Setup automated testing harness and fixtures",
+      ],
+      dueDaysOffset: 1,
+    },
+    {
+      title: `2. Primary Computational & Processing Engine (${phrase2})`,
+      description: `Implement core computational logic, state mutations, and business workflows for: ${phrase2}.`,
+      status: "Todo",
+      priority: "Urgent",
+      tag: "feature",
+      estimatedHours: 8,
+      subtasks: [
+        `Implement domain service functions for ${phrase2}`,
+        "Add input sanitation and error boundary handling",
+        "Write unit tests with comprehensive edge-case assertions",
+      ],
+      dueDaysOffset: 4,
+    },
+    {
+      title: `3. Interactive UI Viewport & User Controls (${phrase3})`,
+      description: `Construct responsive client views with modern design tokens, accessible keyboard interactions, and instant feedback for: ${phrase3}.`,
+      status: "Todo",
+      priority: "High",
+      tag: "frontend",
+      estimatedHours: 8,
+      subtasks: [
+        `Build responsive viewport and controls for ${phrase3}`,
+        "Implement optimistic UI transitions for zero user latency",
+        "Add keyboard navigation and ARIA accessibility compliance",
+      ],
+      dueDaysOffset: 7,
+    },
+    {
+      title: `4. State Synchronization, Persistence & Automation (${phrase4})`,
+      description: `Implement persistent storage, automated sync workflows, and export capabilities for: ${phrase4}.`,
+      status: "Todo",
+      priority: "Medium",
+      tag: "feature",
+      estimatedHours: 6,
+      subtasks: [
+        `Persist ${phrase4} state records in storage`,
+        "Implement search, filtering, and history tracking",
+        "Add automated status updates and document export formatting",
+      ],
+      dueDaysOffset: 9,
+    },
+    {
+      title: `5. Security Hardening, Performance Benchmarking & QA Sign-Off`,
+      description: `Benchmark response latency, eliminate layout shifts, and execute end-to-end regression tests before production release.`,
+      status: "Todo",
+      priority: "Medium",
+      tag: "performance",
+      estimatedHours: 4,
+      subtasks: [
+        "Run full static code analysis and ESLint zero-defect checks",
+        "Audit Core Web Vitals to achieve 95+ performance score",
+        "Perform end-to-end regression testing and deployment verification",
+      ],
+      dueDaysOffset: 12,
+    },
+  ];
 }

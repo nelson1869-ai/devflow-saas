@@ -38,6 +38,9 @@ export function TaskCard({
   const logged = task.loggedHours || 0;
   const isOverBudget = logged > estimated && estimated > 0;
 
+  const subtasks = task.subtasks || [];
+  const completedCount = subtasks.filter((s) => s.isCompleted).length;
+
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData("text/plain", task.id);
   };
@@ -109,6 +112,28 @@ export function TaskCard({
           {task.description}
         </p>
 
+        {/* Subtask Checklist Progress Indicator (Phase 67) */}
+        {subtasks.length > 0 && (
+          <div className="rounded-lg border border-slate-800/80 bg-slate-900/40 p-2 space-y-1">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-400 font-medium">
+                ☑️ Subtasks: {completedCount}/{subtasks.length}
+              </span>
+              <span className="text-[10px] font-mono text-emerald-400">
+                {Math.round((completedCount / subtasks.length) * 100)}%
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+              <div
+                style={{
+                  width: `${Math.round((completedCount / subtasks.length) * 100)}%`,
+                }}
+                className="h-full rounded-full bg-emerald-400 transition-all duration-300"
+              />
+            </div>
+          </div>
+        )}
+
         {/* Time Progress Indicator (Phase 66) */}
         {(estimated > 0 || logged > 0) && (
           <div className="rounded-lg border border-slate-800/80 bg-slate-900/40 p-2 space-y-1">
@@ -172,7 +197,7 @@ export function TaskCard({
           <button
             type="button"
             onClick={() => onEdit(task)}
-            title="Edit task & track time"
+            title="Edit task & track subtasks"
             className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
           >
             ✏️

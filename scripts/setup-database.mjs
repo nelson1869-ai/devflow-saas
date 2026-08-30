@@ -215,6 +215,20 @@ db.exec(`
   );
 `);
 
+// 15. Subtasks & Nested Checklist (Phase 67)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS devflow_subtasks (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    is_completed INTEGER NOT NULL DEFAULT 0,
+    assignee_name TEXT,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (task_id) REFERENCES devflow_tasks(id) ON DELETE CASCADE
+  );
+`);
+
 // Seed Initial Data
 const orgCount = db
   .prepare("SELECT count(*) as count FROM devflow_organizations")
@@ -236,10 +250,9 @@ if (userCount === 0) {
   const insertUser = db.prepare(
     "INSERT INTO devflow_users (id, name, email, role, avatar_url) VALUES (?, ?, ?, ?, ?)",
   );
-  insertUser.run("usr-1", "Nelson", "nelson@devflow.io", "Admin", null);
-  insertUser.run("usr-2", "Sarah Chen", "sarah@acme.dev", "Member", null);
-  insertUser.run("usr-3", "Alex Kim", "alex@acme.dev", "Member", null);
-  insertUser.run("usr-4", "Elena Vance", "elena@acme.dev", "Member", null);
+  insertUser.run("usr-1", "Alex Rivera", "alex@acme.dev", "Admin", null);
+  insertUser.run("usr-2", "Sarah Connor", "sarah@acme.dev", "Member", null);
+  insertUser.run("usr-3", "Devin Zhao", "devin@acme.dev", "Member", null);
 }
 
 const projectCount = db
@@ -276,8 +289,8 @@ if (projectCount === 0) {
   );
 
   const insertTask = db.prepare(`
-    INSERT INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date, estimated_hours)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   insertTask.run(
@@ -287,9 +300,10 @@ if (projectCount === 0) {
     "Connect GitHub and Google OAuth providers with PKCE flow.",
     "In Progress",
     "High",
-    "Nelson",
+    "Alex Rivera",
     "security",
     "2026-09-05",
+    8,
   );
 
   insertTask.run(
@@ -299,9 +313,10 @@ if (projectCount === 0) {
     "Prevent brute-force authentication attacks using sliding-window rate limit algorithm.",
     "Todo",
     "Urgent",
-    "Sarah Chen",
+    "Sarah Connor",
     "backend",
     "2026-09-02",
+    4,
   );
 
   insertTask.run(
@@ -311,9 +326,10 @@ if (projectCount === 0) {
     "Cron job for nightly snapshots and WAL checkpoint integrity checks.",
     "Done",
     "Medium",
-    "Alex Kim",
+    "Devin Zhao",
     "infra",
     "2026-08-28",
+    6,
   );
 
   insertTask.run(
@@ -323,9 +339,10 @@ if (projectCount === 0) {
     "Clean up event listeners on client disconnect to avoid dangling sockets.",
     "Todo",
     "Urgent",
-    "Nelson",
+    "Alex Rivera",
     "bug",
     "2026-09-01",
+    3,
   );
 
   insertTask.run(
@@ -335,9 +352,44 @@ if (projectCount === 0) {
     "Implement horizontal tab scroll on mobile viewports with accessible active indicators.",
     "Review",
     "Medium",
-    "Elena Vance",
+    "Sarah Connor",
     "frontend",
     "2026-09-08",
+    5,
+  );
+
+  // Seed Initial Subtasks for Task 1
+  const insertSubtask = db.prepare(`
+    INSERT INTO devflow_subtasks (id, task_id, title, is_completed, position)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  insertSubtask.run(
+    "sub-1",
+    "task-1",
+    "Register GitHub OAuth App credentials",
+    1,
+    0,
+  );
+  insertSubtask.run(
+    "sub-2",
+    "task-1",
+    "Implement PKCE token exchange endpoint",
+    1,
+    1,
+  );
+  insertSubtask.run(
+    "sub-3",
+    "task-1",
+    "Add user session cookie encryption",
+    0,
+    2,
+  );
+  insertSubtask.run(
+    "sub-4",
+    "task-1",
+    "Write integration tests for token refresh",
+    0,
+    3,
   );
 }
 
@@ -390,49 +442,6 @@ if (tagCount === 0) {
     "feature",
     "sky",
     "New feature initiative and product capability.",
-  );
-}
-
-const savedViewCount = db
-  .prepare("SELECT count(*) as count FROM devflow_saved_views")
-  .get().count;
-if (savedViewCount === 0) {
-  console.log("Seeding Initial Saved Filter Views...");
-  const insertView = db.prepare(`
-    INSERT INTO devflow_saved_views (id, org_id, user_id, project_id, name, icon, filters_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  insertView.run(
-    "view-1",
-    "org-1",
-    "usr-1",
-    "proj-1",
-    "Urgent Bugs",
-    "🔥",
-    JSON.stringify({
-      priority: "Urgent",
-      tag: "bug",
-      status: "All",
-      assignee: "All",
-      query: "",
-    }),
-  );
-
-  insertView.run(
-    "view-2",
-    "org-1",
-    "usr-1",
-    "proj-1",
-    "Frontend Features",
-    "🎨",
-    JSON.stringify({
-      priority: "All",
-      tag: "frontend",
-      status: "All",
-      assignee: "All",
-      query: "",
-    }),
   );
 }
 

@@ -9,6 +9,7 @@ import { MarkdownView } from "../components/MarkdownView";
 import { MentionAutocompleteInput } from "../components/MentionAutocompleteInput";
 import { MentionText } from "../components/MentionText";
 import { TimeTrackingSection } from "./TimeTrackingSection";
+import { SubtasksSection } from "./SubtasksSection";
 
 type EditTaskModalProps = Readonly<{
   task: Task;
@@ -465,6 +466,15 @@ export function EditTaskModal({
             </button>
           </div>
         </form>
+
+        {/* Subtasks & Checklist Section (Phase 67) */}
+        <div className="border-t border-slate-800 pt-6">
+          <SubtasksSection
+            task={task}
+            projectId={task.projectId}
+            allUsers={allUsers}
+          />
+        </div>
 
         {/* Time Tracking & Logged Effort Section (Phase 66) */}
         <div className="border-t border-slate-800 pt-6">

@@ -181,6 +181,17 @@ try {
       FOREIGN KEY (task_id) REFERENCES devflow_tasks(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS devflow_subtasks (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      is_completed INTEGER NOT NULL DEFAULT 0,
+      assignee_name TEXT,
+      position INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (task_id) REFERENCES devflow_tasks(id) ON DELETE CASCADE
+    );
   `);
 
   // Runtime self-healing column migrations

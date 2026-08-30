@@ -8,6 +8,7 @@ import type {
   TaskTag,
   TaskDependency,
   TimeLog,
+  Subtask,
 } from "../tasks/types";
 import type { WorkspaceTag, TagColor } from "./tags";
 
@@ -53,6 +54,16 @@ type TimeLogRow = {
   hours: number;
   description: string | null;
   logged_at: string;
+};
+
+type SubtaskRow = {
+  id: string;
+  task_id: string;
+  title: string;
+  is_completed: number;
+  assignee_name: string | null;
+  position: number;
+  created_at: string;
 };
 
 type TagRow = {
@@ -190,6 +201,31 @@ export function getTasksByProjectId(projectId: string): readonly Task[] {
     timeMap.set(log.task_id, list);
   }
 
+  // Fetch all subtasks for tasks in this project
+  const subtaskStmt = db.prepare(`
+    SELECT id, task_id, title, is_completed, assignee_name, position, created_at
+    FROM devflow_subtasks
+    WHERE task_id IN (SELECT id FROM devflow_tasks WHERE project_id = ?)
+    ORDER BY position ASC, created_at ASC
+  `);
+
+  const subtaskRows = subtaskStmt.all(projectId) as SubtaskRow[];
+  const subtaskMap = new Map<string, Subtask[]>();
+
+  for (const s of subtaskRows) {
+    const list = subtaskMap.get(s.task_id) || [];
+    list.push({
+      id: s.id,
+      taskId: s.task_id,
+      title: s.title,
+      isCompleted: Boolean(s.is_completed),
+      assigneeName: s.assignee_name ?? undefined,
+      position: s.position,
+      createdAt: s.created_at,
+    });
+    subtaskMap.set(s.task_id, list);
+  }
+
   return rows.map((row) => {
     const logs = timeMap.get(row.id) || [];
     const loggedHours = logs.reduce((sum, l) => sum + l.hours, 0);
@@ -208,6 +244,7 @@ export function getTasksByProjectId(projectId: string): readonly Task[] {
       estimatedHours: row.estimated_hours || 0,
       loggedHours: Number(loggedHours.toFixed(1)),
       timeLogs: logs,
+      subtasks: subtaskMap.get(row.id) || [],
     };
   });
 }

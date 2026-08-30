@@ -22,6 +22,16 @@ export type TimeLog = Readonly<{
   loggedAt: string;
 }>;
 
+export type Subtask = Readonly<{
+  id: string;
+  taskId: string;
+  title: string;
+  isCompleted: boolean;
+  assigneeName?: string;
+  position: number;
+  createdAt: string;
+}>;
+
 export type Task = Readonly<{
   id: string;
   projectId: string;
@@ -36,4 +46,5 @@ export type Task = Readonly<{
   estimatedHours?: number;
   loggedHours?: number;
   timeLogs?: readonly TimeLog[];
+  subtasks?: readonly Subtask[];
 }>;

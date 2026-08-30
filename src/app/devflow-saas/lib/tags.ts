@@ -1,6 +1,3 @@
-import "server-only";
-import { db } from "./db";
-
 export type TagColor =
   | "cyan"
   | "emerald"
@@ -20,15 +17,6 @@ export type WorkspaceTag = Readonly<{
   createdAt: string;
 }>;
 
-type TagRow = {
-  id: string;
-  org_id: string;
-  name: string;
-  color: TagColor;
-  description: string | null;
-  created_at: string;
-};
-
 const tagColorStyles: Record<string, string> = {
   cyan: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30",
   emerald: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
@@ -42,23 +30,4 @@ const tagColorStyles: Record<string, string> = {
 
 export function getTagBadgeStyle(colorName: string): string {
   return tagColorStyles[colorName] || tagColorStyles.cyan;
-}
-
-export function getTagsByOrgId(orgId: string): readonly WorkspaceTag[] {
-  const stmt = db.prepare(`
-    SELECT id, org_id, name, color, description, created_at
-    FROM devflow_tags
-    WHERE org_id = ?
-    ORDER BY name ASC
-  `);
-
-  const rows = stmt.all(orgId) as TagRow[];
-  return rows.map((r) => ({
-    id: r.id,
-    orgId: r.org_id,
-    name: r.name,
-    color: r.color,
-    description: r.description ?? undefined,
-    createdAt: r.created_at,
-  }));
 }

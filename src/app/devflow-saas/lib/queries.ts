@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "./db";
 import type { Project, ProjectStatus } from "../projects/types";
 import type { Task, TaskPriority, TaskStatus, TaskTag } from "../tasks/types";
+import type { WorkspaceTag, TagColor } from "./tags";
 
 type ProjectRow = {
   id: string;
@@ -23,6 +24,15 @@ type TaskRow = {
   assignee_name: string;
   tag: string;
   due_date: string | null;
+  created_at: string;
+};
+
+type TagRow = {
+  id: string;
+  org_id: string;
+  name: string;
+  color: TagColor;
+  description: string | null;
   created_at: string;
 };
 
@@ -61,7 +71,7 @@ export function getProjectsByOrgId(orgId: string): readonly Project[] {
   }));
 }
 
-export function getProjectById(id: string): Project | undefined {
+export function getProjectById(id: string): Project | null {
   const stmt = db.prepare(`
     SELECT id, name, key, description, status
     FROM devflow_projects
@@ -69,7 +79,7 @@ export function getProjectById(id: string): Project | undefined {
   `);
 
   const row = stmt.get(id) as ProjectRow | undefined;
-  if (!row) return undefined;
+  if (!row) return null;
 
   return {
     id: row.id,
@@ -99,5 +109,24 @@ export function getTasksByProjectId(projectId: string): readonly Task[] {
     assigneeName: row.assignee_name,
     tag: (row.tag as TaskTag) || "feature",
     dueDate: row.due_date ?? undefined,
+  }));
+}
+
+export function getTagsByOrgId(orgId: string): readonly WorkspaceTag[] {
+  const stmt = db.prepare(`
+    SELECT id, org_id, name, color, description, created_at
+    FROM devflow_tags
+    WHERE org_id = ?
+    ORDER BY name ASC
+  `);
+
+  const rows = stmt.all(orgId) as TagRow[];
+  return rows.map((r) => ({
+    id: r.id,
+    orgId: r.org_id,
+    name: r.name,
+    color: r.color,
+    description: r.description ?? undefined,
+    createdAt: r.created_at,
   }));
 }

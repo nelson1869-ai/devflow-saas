@@ -132,6 +132,12 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
                 Search
               </Link>
               <Link
+                href="/devflow-saas/tags"
+                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+              >
+                Tags
+              </Link>
+              <Link
                 href="/devflow-saas/activity"
                 className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
               >

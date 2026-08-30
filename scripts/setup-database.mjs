@@ -1,28 +1,17 @@
-/**
- * Creates the local SQLite tables and inserts repeatable learning data.
- * Run automatically before `npm run dev` and `npm run build`.
- */
-import { mkdirSync } from "node:fs";
-import path from "node:path";
-
 import Database from "better-sqlite3";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const dataDirectory = path.join(process.cwd(), "data");
-const databasePath = path.join(dataDirectory, "learning.db");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const dbPath = path.join(__dirname, "..", "devflow.db");
 
-mkdirSync(dataDirectory, { recursive: true });
+console.log(`Setting up DevFlow SQLite database at ${dbPath}...`);
+const database = new Database(dbPath);
 
-const database = new Database(databasePath);
-
-database.pragma("foreign_keys = ON");
+database.pragma("journal_mode = WAL");
 
 database.exec(`
-  CREATE TABLE IF NOT EXISTS products (
-    id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    price INTEGER NOT NULL CHECK (price >= 0)
-  );
-
   CREATE TABLE IF NOT EXISTS devflow_organizations (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -37,6 +26,17 @@ database.exec(`
     role TEXT NOT NULL DEFAULT 'Member',
     avatar_url TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS devflow_memberships (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    org_id TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'Member',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE,
+    FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE,
+    UNIQUE(user_id, org_id)
   );
 
   CREATE TABLE IF NOT EXISTS devflow_projects (
@@ -104,6 +104,7 @@ database.exec(`
     id TEXT PRIMARY KEY,
     org_id TEXT NOT NULL,
     project_id TEXT,
+    task_id TEXT,
     user_name TEXT NOT NULL,
     action TEXT NOT NULL,
     entity_title TEXT NOT NULL,
@@ -113,111 +114,45 @@ database.exec(`
   );
 `);
 
-// Migration: ensure org_id column exists on existing devflow_projects table
+// Migration: ensure task_id column exists on devflow_activity table
 try {
-  database.exec(
-    "ALTER TABLE devflow_projects ADD COLUMN org_id TEXT NOT NULL DEFAULT 'org-1'",
-  );
+  database.exec("ALTER TABLE devflow_activity ADD COLUMN task_id TEXT");
 } catch {
   // Column already exists
 }
 
-// Migration: ensure tag column exists on existing devflow_tasks table
-try {
-  database.exec(
-    "ALTER TABLE devflow_tasks ADD COLUMN tag TEXT NOT NULL DEFAULT 'feature'",
-  );
-} catch {
-  // Column already exists
-}
-
-// Migration: ensure due_date column exists on existing devflow_tasks table
-try {
-  database.exec("ALTER TABLE devflow_tasks ADD COLUMN due_date TEXT");
-} catch {
-  // Column already exists
-}
-
+// Ensure default organization exists
 database.exec(`
-  -- Seed Organizations
-  INSERT OR IGNORE INTO devflow_organizations (id, name, slug) VALUES
-    ('org-1', 'Acme Engineering', 'acme'),
-    ('org-2', 'Stark Industries', 'stark');
+  INSERT OR IGNORE INTO devflow_organizations (id, name, slug)
+  VALUES ('org-1', 'Acme Engineering', 'acme-eng');
 
-  -- Seed Users
-  INSERT OR IGNORE INTO devflow_users (id, name, email, role, avatar_url) VALUES
-    ('user-1', 'Nelson Rivera', 'nelson@devflow.io', 'Admin', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80'),
-    ('user-2', 'Sarah Connor', 'sarah@devflow.io', 'Member', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80'),
-    ('user-3', 'Devin Zhao', 'devin@devflow.io', 'Member', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80');
-
-  -- Seed Tags (Acme Engineering: org-1)
-  INSERT OR IGNORE INTO devflow_tags (id, org_id, name, color, description) VALUES
-    ('tag-1', 'org-1', 'feature', 'sky', 'New product functionality & user stories'),
-    ('tag-2', 'org-1', 'bug', 'rose', 'Defects, regressions, and broken behavior'),
-    ('tag-3', 'org-1', 'frontend', 'purple', 'React components, Tailwind styling, and UI/UX'),
-    ('tag-4', 'org-1', 'backend', 'cyan', 'APIs, SQLite data models, and server actions'),
-    ('tag-5', 'org-1', 'security', 'emerald', 'Authentication, RBAC permissions, and auditing'),
-    ('tag-6', 'org-1', 'infra', 'amber', 'CI/CD, database migrations, and performance');
-
-  -- Seed Tags (Stark Industries: org-2)
-  INSERT OR IGNORE INTO devflow_tags (id, org_id, name, color, description) VALUES
-    ('tag-7', 'org-2', 'ai', 'cyan', 'Neural network pipelines and machine learning'),
-    ('tag-8', 'org-2', 'infra', 'amber', 'Hardware interlocks and energy containment'),
-    ('tag-9', 'org-2', 'security', 'emerald', 'Perimeter defense and access override');
-
-  -- Seed Projects (Acme Engineering: org-1)
-  INSERT OR IGNORE INTO devflow_projects (id, org_id, name, key, description, status) VALUES
-    ('proj-1', 'org-1', 'Platform Core APIs', 'CORE', 'Core authentication, multi-tenant isolation, and rate limiting services.', 'Active'),
-    ('proj-2', 'org-1', 'Customer Dashboard v2', 'DASH', 'Real-time analytics and workflow telemetry dashboard for engineering teams.', 'Planning'),
-    ('proj-3', 'org-1', 'CLI Tooling & SDKs', 'CLI', 'Developer command-line interface and client libraries for DevFlow APIs.', 'Completed');
-
-  -- Seed Projects (Stark Industries: org-2)
-  INSERT OR IGNORE INTO devflow_projects (id, org_id, name, key, description, status) VALUES
-    ('proj-4', 'org-2', 'Arc Reactor Grid Management', 'ARC', 'Clean energy distribution telemetry and decentralized load balancing.', 'Active'),
-    ('proj-5', 'org-2', 'Jarvis Neural Assistant v4', 'JARV', 'Edge inference neural network pipeline for autonomous diagnostics.', 'Planning');
-
-  -- Seed Tasks (Acme Engineering)
-  INSERT OR IGNORE INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date) VALUES
-    ('task-101', 'proj-1', 'Implement JWT Session Verification', 'Validate session cookies in middleware:&#10;- [x] Decode RSA public key&#10;- [ ] Check tenant claims and permissions&#10;- [ ] Verify expired token handling', 'In Progress', 'High', 'Nelson Rivera', 'security', date('now', '+3 days')),
-    ('task-102', 'proj-1', 'Configure Redis Rate Limiter', 'Apply 100 req/min bucket per API key for external traffic.', 'Todo', 'Urgent', 'Devin Zhao', 'backend', date('now')),
-    ('task-103', 'proj-1', 'Database Isolation Unit Tests', 'Write integration tests ensuring zero data leak across organizations.', 'Review', 'Medium', 'Sarah Connor', 'infra', date('now', '-2 days')),
-    ('task-201', 'proj-2', 'Design Telemetry Chart Wireframes', 'Draft Figma components for latency percentiles and error rates.', 'In Progress', 'Medium', 'Sarah Connor', 'frontend', date('now', '+7 days'));
-
-  -- Seed Tasks (Stark Industries)
-  INSERT OR IGNORE INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date) VALUES
-    ('task-401', 'proj-4', 'Thermal Safety Interlocks', 'Calibrate magnetic containment sensors for 100GW output spikes.', 'In Progress', 'Urgent', 'Nelson Rivera', 'infra', date('now', '+1 day')),
-    ('task-501', 'proj-5', 'Optimize Attention Mechanism', 'Quantize transformer weights for on-device flight helmet compute.', 'Todo', 'High', 'Devin Zhao', 'backend', date('now', '+5 days'));
-
-  -- Explicitly update existing tasks with due dates and tags
-  UPDATE devflow_tasks SET due_date = date('now', '+3 days'), tag = 'security' WHERE id = 'task-101';
-  UPDATE devflow_tasks SET due_date = date('now'), tag = 'backend' WHERE id = 'task-102';
-  UPDATE devflow_tasks SET due_date = date('now', '-2 days'), tag = 'infra' WHERE id = 'task-103';
-  UPDATE devflow_tasks SET due_date = date('now', '+7 days'), tag = 'frontend' WHERE id = 'task-201';
-  UPDATE devflow_tasks SET due_date = date('now', '+1 day'), tag = 'infra' WHERE id = 'task-401';
-  UPDATE devflow_tasks SET due_date = date('now', '+5 days'), tag = 'backend' WHERE id = 'task-501';
-
-  -- Seed Comments
-  INSERT OR IGNORE INTO devflow_comments (id, task_id, user_id, user_name, content, created_at) VALUES
-    ('comm-1', 'task-101', 'user-2', 'Sarah Connor', 'Verified the RSA public key rotation logic. Looking solid!', datetime('now', '-25 minutes')),
-    ('comm-2', 'task-101', 'user-1', 'Nelson Rivera', 'Thanks Sarah! Adding unit tests for tenant claims decoding now.', datetime('now', '-10 minutes')),
-    ('comm-3', 'task-102', 'user-1', 'Nelson Rivera', 'We should use Redis token bucket algorithm with a 60-second window.', datetime('now', '-45 minutes'));
-
-  -- Seed Notifications (Acme Engineering)
-  INSERT OR IGNORE INTO devflow_notifications (id, user_id, org_id, title, message, type, link_url, is_read, created_at) VALUES
-    ('notif-1', 'user-1', 'org-1', 'New Comment on your Task', 'Sarah Connor commented on "Implement JWT Session Verification"', 'comment', '/devflow-saas/projects/proj-1', 0, datetime('now', '-15 minutes')),
-    ('notif-2', 'user-1', 'org-1', 'Task Assigned to You', 'You were assigned to lead Platform Core APIs authentication deliverables.', 'assignment', '/devflow-saas/projects/proj-1', 0, datetime('now', '-1 hour')),
-    ('notif-3', 'user-1', 'org-1', 'Task Status Moved', 'Database Isolation Unit Tests moved to Review stage.', 'status', '/devflow-saas/projects/proj-1', 0, datetime('now', '-2 hours')),
-    ('notif-4', 'user-2', 'org-1', 'Task Assigned', 'You were assigned to Database Isolation Unit Tests.', 'assignment', '/devflow-saas/projects/proj-1', 0, datetime('now', '-3 hours'));
-
-  -- Seed Activity Log
-  INSERT OR IGNORE INTO devflow_activity (id, org_id, project_id, user_name, action, entity_title, details, created_at) VALUES
-    ('act-1', 'org-1', 'proj-1', 'Nelson Rivera', 'created_project', 'Platform Core APIs', 'Initial project repository established.', datetime('now', '-2 hours')),
-    ('act-2', 'org-1', 'proj-1', 'Sarah Connor', 'created_task', 'Database Isolation Unit Tests', 'Assigned to Sarah Connor with Medium priority.', datetime('now', '-90 minutes')),
-    ('act-3', 'org-1', 'proj-1', 'Nelson Rivera', 'updated_task_status', 'Implement JWT Session Verification', 'Status moved from Todo to In Progress.', datetime('now', '-45 minutes')),
-    ('act-4', 'org-2', 'proj-4', 'Nelson Rivera', 'created_project', 'Arc Reactor Grid Management', 'Clean energy telemetry initialized.', datetime('now', '-3 hours')),
-    ('act-5', 'org-2', 'proj-4', 'Nelson Rivera', 'created_task', 'Thermal Safety Interlocks', 'Marked Urgent priority.', datetime('now', '-1 hour'));
+  INSERT OR IGNORE INTO devflow_organizations (id, name, slug)
+  VALUES ('org-2', 'HyperScale Labs', 'hyperscale-labs');
 `);
 
-database.close();
+// Ensure default users exist
+database.exec(`
+  INSERT OR IGNORE INTO devflow_users (id, name, email, role, avatar_url)
+  VALUES ('usr-1', 'Alex Rivera', 'alex@acme.dev', 'Admin', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=128&auto=format&fit=crop&q=80');
 
-console.log("DevFlow database schema with tags is ready.");
+  INSERT OR IGNORE INTO devflow_users (id, name, email, role, avatar_url)
+  VALUES ('usr-2', 'Sarah Connor', 'sarah@acme.dev', 'Member', 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=128&auto=format&fit=crop&q=80');
+
+  INSERT OR IGNORE INTO devflow_users (id, name, email, role, avatar_url)
+  VALUES ('usr-3', 'Devin Zhao', 'devin@acme.dev', 'Member', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=128&auto=format&fit=crop&q=80');
+`);
+
+// Ensure memberships exist
+database.exec(`
+  INSERT OR IGNORE INTO devflow_memberships (id, user_id, org_id, role)
+  VALUES ('mem-1', 'usr-1', 'org-1', 'Admin');
+
+  INSERT OR IGNORE INTO devflow_memberships (id, user_id, org_id, role)
+  VALUES ('mem-2', 'usr-2', 'org-1', 'Member');
+
+  INSERT OR IGNORE INTO devflow_memberships (id, user_id, org_id, role)
+  VALUES ('mem-3', 'usr-3', 'org-1', 'Member');
+`);
+
+console.log("Database schema setup complete.");
+database.close();

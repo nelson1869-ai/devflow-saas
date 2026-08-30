@@ -5,19 +5,33 @@
  * DEMO AUTH STATUS: NOT PRODUCTION AUTHENTICATION
  *
  * Provides reusable server-side authorization and tenant isolation checks.
- * Enforces that every project, task, and API key mutation strictly verifies
- * ownership by the current active demo organization.
+ * Enforces that every project, task, milestone, and API key mutation strictly
+ * verifies ownership by the current active demo organization.
  * ============================================================================
  */
 
 import "server-only";
-import { db } from "./db";
 import {
   getDemoCurrentUser,
   getDemoCurrentOrg,
   type User,
   type Organization,
 } from "./auth";
+import {
+  checkDemoAdmin,
+  checkDemoProjectAccess,
+  checkDemoTaskAccess,
+  checkDemoMilestoneAccess,
+  checkDemoApiKeyAccess,
+} from "./security-core";
+
+export {
+  checkDemoAdmin,
+  checkDemoProjectAccess,
+  checkDemoTaskAccess,
+  checkDemoMilestoneAccess,
+  checkDemoApiKeyAccess,
+};
 
 export type GuardResult<T = Record<string, unknown>> =
   | { authorized: true; currentUser: User; currentOrg: Organization; data: T }
@@ -32,10 +46,13 @@ export async function requireDemoAdmin(): Promise<
   const currentUser = await getDemoCurrentUser();
   const currentOrg = await getDemoCurrentOrg();
 
-  if (currentUser.role !== "Admin") {
+  const check = checkDemoAdmin(currentUser.role);
+  if (!check.authorized) {
     return {
       authorized: false,
-      error: "Administrative privileges are required for this action.",
+      error:
+        check.error ||
+        "Administrative privileges are required for this action.",
     };
   }
 
@@ -58,33 +75,16 @@ export async function requireDemoProjectAccess(projectId: string): Promise<
     status: string;
   }>
 > {
-  if (!projectId || typeof projectId !== "string") {
-    return { authorized: false, error: "Valid Project ID is required." };
-  }
-
   const currentUser = await getDemoCurrentUser();
   const currentOrg = await getDemoCurrentOrg();
 
-  const stmt = db.prepare(`
-    SELECT id, name, org_id, status, is_archived
-    FROM devflow_projects
-    WHERE id = ? AND org_id = ?
-  `);
-
-  const project = stmt.get(projectId, currentOrg.id) as
-    | {
-        id: string;
-        name: string;
-        org_id: string;
-        status: string;
-        is_archived: number;
-      }
-    | undefined;
-
-  if (!project) {
+  const check = checkDemoProjectAccess(projectId, currentOrg.id);
+  if (!check.authorized || !check.project) {
     return {
       authorized: false,
-      error: "Project not found or does not belong to the active workspace.",
+      error:
+        check.error ||
+        "Project not found or does not belong to the active workspace.",
     };
   }
 
@@ -93,10 +93,10 @@ export async function requireDemoProjectAccess(projectId: string): Promise<
     currentUser,
     currentOrg,
     data: {
-      projectId: project.id,
-      projectName: project.name,
-      orgId: project.org_id,
-      status: project.status,
+      projectId: check.project.id,
+      projectName: check.project.name,
+      orgId: check.project.org_id,
+      status: check.project.status,
     },
   };
 }
@@ -115,43 +115,16 @@ export async function requireDemoTaskAccess(taskId: string): Promise<
     priority: string;
   }>
 > {
-  if (!taskId || typeof taskId !== "string") {
-    return { authorized: false, error: "Valid Task ID is required." };
-  }
-
   const currentUser = await getDemoCurrentUser();
   const currentOrg = await getDemoCurrentOrg();
 
-  const stmt = db.prepare(`
-    SELECT
-      t.id as task_id,
-      t.title as task_title,
-      t.status as task_status,
-      t.priority as task_priority,
-      p.id as project_id,
-      p.name as project_name,
-      p.org_id
-    FROM devflow_tasks t
-    JOIN devflow_projects p ON p.id = t.project_id
-    WHERE t.id = ? AND p.org_id = ?
-  `);
-
-  const row = stmt.get(taskId, currentOrg.id) as
-    | {
-        task_id: string;
-        task_title: string;
-        task_status: string;
-        task_priority: string;
-        project_id: string;
-        project_name: string;
-        org_id: string;
-      }
-    | undefined;
-
-  if (!row) {
+  const check = checkDemoTaskAccess(taskId, currentOrg.id);
+  if (!check.authorized || !check.task) {
     return {
       authorized: false,
-      error: "Task not found or does not belong to the active workspace.",
+      error:
+        check.error ||
+        "Task not found or does not belong to the active workspace.",
     };
   }
 
@@ -160,13 +133,54 @@ export async function requireDemoTaskAccess(taskId: string): Promise<
     currentUser,
     currentOrg,
     data: {
-      taskId: row.task_id,
-      taskTitle: row.task_title,
-      projectId: row.project_id,
-      projectName: row.project_name,
-      orgId: row.org_id,
-      status: row.task_status,
-      priority: row.task_priority,
+      taskId: check.task.id,
+      taskTitle: check.task.title,
+      projectId: check.task.project_id,
+      projectName: check.task.project_name,
+      orgId: check.task.org_id,
+      status: check.task.status,
+      priority: check.task.priority,
+    },
+  };
+}
+
+/**
+ * Verify that a milestone exists, belongs to the specified project,
+ * AND that project belongs to the active demo organization.
+ */
+export async function requireDemoMilestoneAccess(
+  milestoneId: string,
+  projectId: string,
+): Promise<
+  GuardResult<{
+    milestoneId: string;
+    milestoneTitle: string;
+    projectId: string;
+    orgId: string;
+  }>
+> {
+  const currentUser = await getDemoCurrentUser();
+  const currentOrg = await getDemoCurrentOrg();
+
+  const check = checkDemoMilestoneAccess(milestoneId, projectId, currentOrg.id);
+  if (!check.authorized || !check.milestone) {
+    return {
+      authorized: false,
+      error:
+        check.error ||
+        "Milestone not found, belongs to a different project, or is outside the active workspace.",
+    };
+  }
+
+  return {
+    authorized: true,
+    currentUser,
+    currentOrg,
+    data: {
+      milestoneId: check.milestone.id,
+      milestoneTitle: check.milestone.title,
+      projectId: check.milestone.project_id,
+      orgId: check.milestone.org_id,
     },
   };
 }
@@ -182,27 +196,16 @@ export async function requireDemoApiKeyAccess(keyId: string): Promise<
     isActive: boolean;
   }>
 > {
-  if (!keyId || typeof keyId !== "string") {
-    return { authorized: false, error: "Valid API Key ID is required." };
-  }
-
   const currentUser = await getDemoCurrentUser();
   const currentOrg = await getDemoCurrentOrg();
 
-  const stmt = db.prepare(`
-    SELECT id, name, org_id, is_active
-    FROM devflow_api_keys
-    WHERE id = ? AND org_id = ?
-  `);
-
-  const key = stmt.get(keyId, currentOrg.id) as
-    | { id: string; name: string; org_id: string; is_active: number }
-    | undefined;
-
-  if (!key) {
+  const check = checkDemoApiKeyAccess(keyId, currentOrg.id);
+  if (!check.authorized || !check.apiKey) {
     return {
       authorized: false,
-      error: "API Key not found or does not belong to the active workspace.",
+      error:
+        check.error ||
+        "API Key not found or does not belong to the active workspace.",
     };
   }
 
@@ -211,10 +214,10 @@ export async function requireDemoApiKeyAccess(keyId: string): Promise<
     currentUser,
     currentOrg,
     data: {
-      keyId: key.id,
-      name: key.name,
-      orgId: key.org_id,
-      isActive: Boolean(key.is_active),
+      keyId: check.apiKey.id,
+      name: check.apiKey.name,
+      orgId: check.apiKey.orgId,
+      isActive: check.apiKey.isActive,
     },
   };
 }

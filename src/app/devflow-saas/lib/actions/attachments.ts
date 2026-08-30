@@ -13,7 +13,6 @@ export async function uploadTaskAttachmentAction(
   formData: FormData,
 ): Promise<ActionResponse> {
   const taskId = (formData.get("taskId") as string | null)?.trim() || "";
-  const projectId = (formData.get("projectId") as string | null)?.trim() || "";
   const rawFileName = (formData.get("fileName") as string | null)?.trim();
   const fileType =
     (formData.get("fileType") as string | null)?.trim() ||
@@ -25,20 +24,21 @@ export async function uploadTaskAttachmentAction(
   const fileUrl = (formData.get("fileUrl") as string | null)?.trim();
   const fileObj = formData.get("file") as File | null;
 
-  if (!taskId || !projectId || !rawFileName) {
+  if (!taskId || !rawFileName) {
     return {
       success: false,
-      error: "Task ID, project ID, and file name are required.",
+      error: "Task ID and file name are required.",
     };
   }
 
-  // 1. Enforce Tenant Scoping Guard on Task
+  // 1. Enforce Tenant Scoping Guard on Task (Authoritative Project Resolution)
   const taskGuard = await requireDemoTaskAccess(taskId);
   if (!taskGuard.authorized) {
     return { success: false, error: taskGuard.error };
   }
 
   const { currentUser, currentOrg } = taskGuard;
+  const authoritativeProjectId = taskGuard.data.projectId;
 
   // Sanitize file name
   const cleanBaseName =
@@ -87,7 +87,7 @@ export async function uploadTaskAttachmentAction(
 
     logActivity(
       currentOrg.id,
-      projectId,
+      authoritativeProjectId,
       currentUser.name,
       "updated_task",
       taskGuard.data.taskTitle,
@@ -95,7 +95,7 @@ export async function uploadTaskAttachmentAction(
       taskId,
     );
 
-    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath(`/devflow-saas/projects/${authoritativeProjectId}`);
     return { success: true };
   } catch (err) {
     console.error("Error saving file to public/uploads:", err);
@@ -108,13 +108,13 @@ export async function uploadTaskAttachmentAction(
 
 export async function deleteTaskAttachmentAction(
   attachmentId: string,
-  projectId: string,
+  _optionalBrowserProjectId?: string,
 ): Promise<ActionResponse> {
   const currentOrg = await getDemoCurrentOrg();
 
   try {
     const attachStmt = db.prepare(`
-      SELECT a.file_name, a.file_url, a.task_id, t.title as task_title, p.org_id
+      SELECT a.file_name, a.file_url, a.task_id, t.title as task_title, p.id as project_id, p.org_id
       FROM devflow_attachments a
       JOIN devflow_tasks t ON t.id = a.task_id
       JOIN devflow_projects p ON p.id = t.project_id
@@ -126,6 +126,7 @@ export async function deleteTaskAttachmentAction(
           file_url: string;
           task_id: string;
           task_title: string;
+          project_id: string;
           org_id: string;
         }
       | undefined;
@@ -157,7 +158,7 @@ export async function deleteTaskAttachmentAction(
 
     logActivity(
       currentOrg.id,
-      projectId,
+      att.project_id,
       currentUser.name,
       "updated_task",
       att.task_title,
@@ -165,7 +166,7 @@ export async function deleteTaskAttachmentAction(
       att.task_id,
     );
 
-    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath(`/devflow-saas/projects/${att.project_id}`);
     return { success: true };
   } catch {
     return { success: false, error: "Failed to delete attachment." };

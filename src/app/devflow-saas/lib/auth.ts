@@ -18,8 +18,14 @@
 
 import { cookies } from "next/headers";
 import { db } from "./db";
+import {
+  USER_ROLES,
+  isUserRole,
+  validateUserRole,
+  type UserRole,
+} from "./security-core";
 
-export type UserRole = "Admin" | "Member" | "Viewer";
+export { USER_ROLES, isUserRole, validateUserRole, type UserRole };
 
 export type User = Readonly<{
   id: string;
@@ -95,7 +101,7 @@ export async function getDemoCurrentUser(): Promise<User> {
       "SELECT id, name, email, role, avatar_url FROM devflow_users WHERE id = ?",
     );
     const user = stmt.get(demoUserId) as UserRow | undefined;
-    if (user) {
+    if (user && isUserRole(user.role)) {
       return {
         id: user.id,
         name: user.name,
@@ -113,7 +119,7 @@ export async function getDemoCurrentUser(): Promise<User> {
     )
     .get() as UserRow | undefined;
 
-  if (memberUser) {
+  if (memberUser && isUserRole(memberUser.role)) {
     return {
       id: memberUser.id,
       name: memberUser.name,
@@ -180,7 +186,7 @@ export async function getAllDemoUsers(): Promise<readonly User[]> {
     id: u.id,
     name: u.name,
     email: u.email,
-    role: u.role,
+    role: isUserRole(u.role) ? u.role : "Member",
     avatarUrl: u.avatar_url ?? undefined,
   }));
 }

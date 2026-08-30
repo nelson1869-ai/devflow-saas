@@ -52,3 +52,5 @@ next-env.d.ts
 # Uploaded attachments (ignored from git)
 /public/uploads/*
 !/public/uploads/.gitkeep
+
+.vscode/

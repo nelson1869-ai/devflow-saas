@@ -12,26 +12,26 @@ export async function logTaskTimeAction(
   formData: FormData,
 ): Promise<ActionResponse> {
   const taskId = (formData.get("taskId") as string | null)?.trim() || "";
-  const projectId = (formData.get("projectId") as string | null)?.trim() || "";
   const hoursRaw = (formData.get("hours") as string | null)?.trim();
   const description = (formData.get("description") as string | null)?.trim();
 
   const hours = parseFloat(hoursRaw || "0");
 
-  if (!taskId || !projectId || isNaN(hours) || hours <= 0) {
+  if (!taskId || isNaN(hours) || hours <= 0) {
     return {
       success: false,
       error: "Valid work hours (greater than 0) are required.",
     };
   }
 
-  // 1. Enforce Tenant Scoping Guard on Task
+  // 1. Enforce Tenant Scoping Guard on Task (Authoritative Project Resolution)
   const taskGuard = await requireDemoTaskAccess(taskId);
   if (!taskGuard.authorized) {
     return { success: false, error: taskGuard.error };
   }
 
   const { currentUser, currentOrg } = taskGuard;
+  const authoritativeProjectId = taskGuard.data.projectId;
 
   try {
     const id = `time-${Date.now()}`;
@@ -58,7 +58,7 @@ export async function logTaskTimeAction(
     if (task) {
       logActivity(
         currentOrg.id,
-        projectId,
+        authoritativeProjectId,
         currentUser.name,
         "updated_task",
         task.title,
@@ -78,14 +78,14 @@ export async function logTaskTimeAction(
       ) {
         await runAutomationsForTrigger(currentOrg.id, "time_over_budget", {
           taskId,
-          projectId,
+          projectId: authoritativeProjectId,
           taskTitle: task.title,
           currentUserName: currentUser.name,
         });
       }
     }
 
-    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath(`/devflow-saas/projects/${authoritativeProjectId}`);
     revalidatePath("/devflow-saas/analytics");
     return { success: true };
   } catch {
@@ -95,20 +95,26 @@ export async function logTaskTimeAction(
 
 export async function deleteTimeLogAction(
   timeLogId: string,
-  projectId: string,
+  _optionalBrowserProjectId?: string,
 ): Promise<ActionResponse> {
   const currentOrg = await getDemoCurrentOrg();
 
   try {
     const logStmt = db.prepare(`
-      SELECT l.hours, t.title, t.id as task_id, p.org_id
+      SELECT l.hours, t.title, t.id as task_id, p.id as project_id, p.org_id
       FROM devflow_time_logs l
       JOIN devflow_tasks t ON t.id = l.task_id
       JOIN devflow_projects p ON p.id = t.project_id
       WHERE l.id = ? AND p.org_id = ?
     `);
     const log = logStmt.get(timeLogId, currentOrg.id) as
-      | { hours: number; title: string; task_id: string; org_id: string }
+      | {
+          hours: number;
+          title: string;
+          task_id: string;
+          project_id: string;
+          org_id: string;
+        }
       | undefined;
 
     if (!log) {
@@ -125,7 +131,7 @@ export async function deleteTimeLogAction(
 
     logActivity(
       currentOrg.id,
-      projectId,
+      log.project_id,
       currentUser.name,
       "updated_task",
       log.title,
@@ -133,7 +139,7 @@ export async function deleteTimeLogAction(
       log.task_id,
     );
 
-    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath(`/devflow-saas/projects/${log.project_id}`);
     revalidatePath("/devflow-saas/analytics");
     return { success: true };
   } catch {

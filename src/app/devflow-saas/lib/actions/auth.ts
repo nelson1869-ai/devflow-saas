@@ -8,6 +8,7 @@ import {
   DEMO_ORG_COOKIE_NAME,
   THEME_ACCENT_COOKIE_NAME,
   THEME_MODE_COOKIE_NAME,
+  validateUserRole,
   type ThemeAccent,
   type ThemeMode,
   type UserRole,
@@ -123,7 +124,7 @@ export async function setThemeModeAction(
 
 export async function updateUserRoleAction(
   targetUserId: string,
-  newRole: UserRole,
+  newRoleInput: string | UserRole,
 ): Promise<ActionResponse> {
   // 1. Enforce Admin Role Check
   const adminGuard = await requireDemoAdmin();
@@ -131,6 +132,13 @@ export async function updateUserRoleAction(
     return { success: false, error: adminGuard.error };
   }
 
+  // 2. Enforce Runtime Role Validation against strict allowlist
+  const roleValidation = validateUserRole(newRoleInput);
+  if (!roleValidation.valid || !roleValidation.role) {
+    return { success: false, error: roleValidation.error };
+  }
+
+  const validRole = roleValidation.role;
   const { currentUser, currentOrg } = adminGuard;
 
   try {
@@ -141,7 +149,7 @@ export async function updateUserRoleAction(
     if (!targetUser) return { success: false, error: "User not found." };
 
     db.prepare("UPDATE devflow_users SET role = ? WHERE id = ?").run(
-      newRole,
+      validRole,
       targetUserId,
     );
 
@@ -151,7 +159,7 @@ export async function updateUserRoleAction(
       currentUser.name,
       "updated_user",
       targetUser.name,
-      `Changed role to "${newRole}".`,
+      `Changed role to "${validRole}".`,
     );
 
     revalidatePath("/devflow-saas");
@@ -174,12 +182,19 @@ export async function inviteTeamMemberAction(
 
   const name = (formData.get("name") as string | null)?.trim();
   const email = (formData.get("email") as string | null)?.trim().toLowerCase();
-  const role = ((formData.get("role") as string | null)?.trim() ||
-    "Member") as UserRole;
+  const rawRole = (formData.get("role") as string | null)?.trim() || "Member";
 
   if (!name || !email) {
     return { success: false, error: "Name and email are required." };
   }
+
+  // 2. Enforce Runtime Role Validation
+  const roleValidation = validateUserRole(rawRole);
+  if (!roleValidation.valid || !roleValidation.role) {
+    return { success: false, error: roleValidation.error };
+  }
+
+  const validRole = roleValidation.role;
 
   try {
     const existing = db
@@ -198,7 +213,7 @@ export async function inviteTeamMemberAction(
       INSERT INTO devflow_users (id, name, email, role)
       VALUES (?, ?, ?, ?)
     `,
-    ).run(id, name, email, role);
+    ).run(id, name, email, validRole);
 
     logActivity(
       currentOrg.id,
@@ -206,7 +221,7 @@ export async function inviteTeamMemberAction(
       currentUser.name,
       "invited_user",
       name,
-      `Invited ${name} (${email}) with role "${role}".`,
+      `Invited ${name} (${email}) with role "${validRole}".`,
     );
 
     revalidatePath("/devflow-saas");

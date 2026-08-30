@@ -52,7 +52,7 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
   return (
     <div
       data-accent={currentAccent}
-      className="min-h-screen bg-slate-950 text-slate-100 antialiased selection:bg-cyan-500 selection:text-white"
+      className="min-h-screen bg-slate-950 text-slate-100 antialiased selection:bg-cyan-500 selection:text-white font-sans"
     >
       {/* Dynamic Global Theme Accent CSS Variables */}
       <style>{`
@@ -104,7 +104,7 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
 
             <nav
               aria-label="Main Navigation"
-              className="hidden items-center gap-5 sm:flex"
+              className="hidden items-center gap-4 sm:flex"
             >
               <Link
                 href="/devflow-saas"
@@ -153,6 +153,12 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
                 className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
               >
                 Webhooks
+              </Link>
+              <Link
+                href="/devflow-saas/settings/export"
+                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+              >
+                Backups
               </Link>
               <Link
                 href="/devflow-saas/team"

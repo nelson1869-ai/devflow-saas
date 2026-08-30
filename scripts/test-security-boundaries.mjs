@@ -2,17 +2,18 @@
  * ============================================================================
  * DEVFLOW SAAS — SECURITY & TENANT BOUNDARY AUTOMATED TEST SUITE
  * ============================================================================
+ * Tests the REAL production security and tenant isolation functions:
  * 1. Pure Security Core (security-core.ts)
  *    - Runtime Role Allowlist & Validation (isUserRole, validateUserRole)
  *    - API Key Scope Allowlist (validateApiScopes)
  *    - Pure Admin Authorization Check (checkDemoAdmin)
- * 2. Database-Dependent Security (Canonical SQLite)
- *    - Real SHA-256 API Key Validation & Scope Check
- *    - Real Expired & Revoked Key Rejection
- *    - Project Tenant Isolation
- *    - Task Tenant Isolation
- *    - Milestone Relational Ownership Guard
- *    - API Key Tenant Isolation
+ * 2. Database-Dependent Security (security-access.ts)
+ *    - Real SHA-256 API Key Validation & Scope Check (validateApiKeyAndScope)
+ *    - Real Expired & Revoked Key Rejection (validateApiKeyAndScope)
+ *    - Real Project Tenant Isolation (checkDemoProjectAccess)
+ *    - Real Task Tenant Isolation (checkDemoTaskAccess)
+ *    - Real Milestone Relational Ownership Guard (checkDemoMilestoneAccess)
+ *    - Real API Key Tenant Isolation (checkDemoApiKeyAccess)
  * 3. Database Multi-Tenant B-Tree Performance Indexes
  * ============================================================================
  */
@@ -21,6 +22,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import Database from "better-sqlite3";
 
+// REAL Pure Production Functions
 import {
   USER_ROLES,
   isUserRole,
@@ -29,6 +31,15 @@ import {
   validateApiScopes,
   checkDemoAdmin,
 } from "../src/app/devflow-saas/lib/security-core.ts";
+
+// REAL DB-Dependent Production Functions
+import {
+  validateApiKeyAndScope,
+  checkDemoProjectAccess,
+  checkDemoTaskAccess,
+  checkDemoMilestoneAccess,
+  checkDemoApiKeyAccess,
+} from "../src/app/devflow-saas/lib/security-access.ts";
 
 const dbPath = path.resolve(process.cwd(), "devflow.db");
 const db = new Database(dbPath);
@@ -143,116 +154,7 @@ console.log(
   "\n--- SECTION B: SERVER DATABASE SECURITY & TENANT BOUNDARIES ---",
 );
 
-function testValidateApiKeyAndScope(rawKey, requiredScope) {
-  if (!rawKey || !rawKey.startsWith("df_live_")) {
-    return {
-      valid: false,
-      error: "Invalid API key format. Must start with df_live_.",
-    };
-  }
-  const hash = crypto.createHash("sha256").update(rawKey).digest("hex");
-  const row = db
-    .prepare(
-      "SELECT id, org_id, user_id, scopes, is_active, expires_at FROM devflow_api_keys WHERE key_hash = ?",
-    )
-    .get(hash);
-  if (!row)
-    return { valid: false, error: "API key not recognized or invalid." };
-  if (!row.is_active)
-    return {
-      valid: false,
-      error: "This API key has been revoked or deactivated.",
-    };
-  if (row.expires_at && new Date(row.expires_at).getTime() < Date.now())
-    return { valid: false, error: "This API key has expired." };
-  if (requiredScope) {
-    const grantedScopes = row.scopes.split(",").map((s) => s.trim());
-    if (!grantedScopes.includes(requiredScope))
-      return {
-        valid: false,
-        error: `Missing required scope permission: "${requiredScope}".`,
-      };
-  }
-  return { valid: true, orgId: row.org_id, userId: row.user_id };
-}
-
-function testCheckProjectAccess(projectId, orgId) {
-  if (!projectId || !orgId)
-    return { authorized: false, error: "Project ID and Org ID required." };
-  const project = db
-    .prepare(
-      "SELECT id, name, org_id FROM devflow_projects WHERE id = ? AND org_id = ?",
-    )
-    .get(projectId, orgId);
-  if (!project)
-    return {
-      authorized: false,
-      error: "Project not found or does not belong to the active workspace.",
-    };
-  return { authorized: true, project };
-}
-
-function testCheckTaskAccess(taskId, orgId) {
-  if (!taskId || !orgId)
-    return { authorized: false, error: "Task ID and Org ID required." };
-  const task = db
-    .prepare(
-      "SELECT t.id, t.title, p.id as project_id, p.org_id FROM devflow_tasks t JOIN devflow_projects p ON p.id = t.project_id WHERE t.id = ? AND p.org_id = ?",
-    )
-    .get(taskId, orgId);
-  if (!task)
-    return {
-      authorized: false,
-      error: "Task not found or does not belong to the active workspace.",
-    };
-  return { authorized: true, task };
-}
-
-function testCheckMilestoneAccess(milestoneId, projectId, orgId) {
-  if (!milestoneId || !projectId || !orgId)
-    return {
-      authorized: false,
-      error: "Milestone, Project, and Org ID required.",
-    };
-  const milestone = db
-    .prepare(
-      "SELECT m.id, m.title, m.project_id, p.org_id FROM devflow_milestones m JOIN devflow_projects p ON p.id = m.project_id WHERE m.id = ? AND m.project_id = ? AND p.org_id = ?",
-    )
-    .get(milestoneId, projectId, orgId);
-  if (!milestone)
-    return {
-      authorized: false,
-      error:
-        "Milestone not found, belongs to a different project, or is outside the active workspace.",
-    };
-  return { authorized: true, milestone };
-}
-
-function testCheckApiKeyAccess(keyId, orgId) {
-  if (!keyId || !orgId)
-    return { authorized: false, error: "API Key ID and Org ID required." };
-  const key = db
-    .prepare(
-      "SELECT id, name, org_id, is_active FROM devflow_api_keys WHERE id = ? AND org_id = ?",
-    )
-    .get(keyId, orgId);
-  if (!key)
-    return {
-      authorized: false,
-      error: "API Key not found or does not belong to the active workspace.",
-    };
-  return {
-    authorized: true,
-    apiKey: {
-      id: key.id,
-      name: key.name,
-      orgId: key.org_id,
-      isActive: Boolean(key.is_active),
-    },
-  };
-}
-
-// TEST 4: Real SHA-256 API Key Authentication & Scope Enforcement
+// TEST 4: Real SHA-256 API Key Authentication & Scope Enforcement (Calling REAL validateApiKeyAndScope)
 console.log("TEST 4: Real SHA-256 API Key Authentication & Scope Enforcement");
 const rawApiKey = `df_live_test_${crypto.randomBytes(16).toString("hex")}`;
 const keyHash = crypto.createHash("sha256").update(rawApiKey).digest("hex");
@@ -265,20 +167,20 @@ db.prepare(
 `,
 ).run(testKeyId, rawApiKey.slice(0, 15), keyHash);
 
-const validAuth = testValidateApiKeyAndScope(rawApiKey, "read:tasks");
+const validAuth = validateApiKeyAndScope(rawApiKey, "read:tasks");
 assert(
   validAuth.valid && validAuth.orgId === "org-1",
   "Valid active API key with granted scope succeeds",
 );
 
-const missingScopeAuth = testValidateApiKeyAndScope(rawApiKey, "write:tasks");
+const missingScopeAuth = validateApiKeyAndScope(rawApiKey, "write:tasks");
 assert(
   !missingScopeAuth.valid &&
     missingScopeAuth.error?.includes("Missing required scope"),
   "API key without 'write:tasks' scope is rejected",
 );
 
-const unknownKeyAuth = testValidateApiKeyAndScope(
+const unknownKeyAuth = validateApiKeyAndScope(
   "df_live_unknown_nonexistent_key_999",
   "read:tasks",
 );
@@ -287,7 +189,7 @@ assert(
   "Unknown API key fails authentication",
 );
 
-// TEST 5: Real Expired & Revoked API Key Validation
+// TEST 5: Real Expired & Revoked API Key Validation (Calling REAL validateApiKeyAndScope)
 console.log("\nTEST 5: Real Expired & Revoked API Key Validation");
 const expiredRawKey = `df_live_expired_${crypto.randomBytes(16).toString("hex")}`;
 const expiredHash = crypto
@@ -308,7 +210,7 @@ db.prepare(
   yesterdayIso,
 );
 
-const expiredAuth = testValidateApiKeyAndScope(expiredRawKey, "read:tasks");
+const expiredAuth = validateApiKeyAndScope(expiredRawKey, "read:tasks");
 assert(
   !expiredAuth.valid && expiredAuth.error?.includes("expired"),
   "Real expired API key (expires_at in past) is rejected",
@@ -327,28 +229,28 @@ db.prepare(
 `,
 ).run(`key-rev-${Date.now()}`, revokedRawKey.slice(0, 15), revokedHash);
 
-const revokedAuth = testValidateApiKeyAndScope(revokedRawKey, "read:tasks");
+const revokedAuth = validateApiKeyAndScope(revokedRawKey, "read:tasks");
 assert(
   !revokedAuth.valid && revokedAuth.error?.includes("revoked or deactivated"),
   "Revoked API key (is_active = 0) is rejected",
 );
 
-// TEST 6: Real Tenant Isolation for Projects
+// TEST 6: Real Tenant Isolation for Projects (Calling REAL checkDemoProjectAccess)
 console.log("\nTEST 6: Real Tenant Isolation for Projects");
-const validProjectAccess = testCheckProjectAccess("proj-1", "org-1");
+const validProjectAccess = checkDemoProjectAccess("proj-1", "org-1");
 assert(
   validProjectAccess.authorized && validProjectAccess.project?.id === "proj-1",
   "Org-1 successfully accesses its own project proj-1",
 );
 
-const crossTenantProjectAccess = testCheckProjectAccess("proj-1", "org-2");
+const crossTenantProjectAccess = checkDemoProjectAccess("proj-1", "org-2");
 assert(
   !crossTenantProjectAccess.authorized &&
     crossTenantProjectAccess.error?.includes("Project not found"),
   "Org-2 is strictly blocked from accessing Org-1's project proj-1",
 );
 
-// TEST 7: Real Tenant Isolation for Tasks
+// TEST 7: Real Tenant Isolation for Tasks (Calling REAL checkDemoTaskAccess)
 console.log("\nTEST 7: Real Tenant Isolation for Tasks");
 const org1Task = db
   .prepare(
@@ -361,13 +263,13 @@ const org1Task = db
   .get();
 
 if (org1Task) {
-  const validTaskAccess = testCheckTaskAccess(org1Task.id, "org-1");
+  const validTaskAccess = checkDemoTaskAccess(org1Task.id, "org-1");
   assert(
     validTaskAccess.authorized && validTaskAccess.task?.id === org1Task.id,
     `Org-1 successfully accesses task ${org1Task.id}`,
   );
 
-  const crossTenantTaskAccess = testCheckTaskAccess(org1Task.id, "org-2");
+  const crossTenantTaskAccess = checkDemoTaskAccess(org1Task.id, "org-2");
   assert(
     !crossTenantTaskAccess.authorized &&
       crossTenantTaskAccess.error?.includes("Task not found"),
@@ -375,7 +277,7 @@ if (org1Task) {
   );
 }
 
-// TEST 8: Real Milestone Relational Ownership Guard
+// TEST 8: Real Milestone Relational Ownership Guard (Calling REAL checkDemoMilestoneAccess)
 console.log("\nTEST 8: Real Milestone Relational Ownership Guard");
 const msTestProj1 = "proj-1";
 const msTestProj2 = "proj-2";
@@ -388,13 +290,13 @@ db.prepare(
 `,
 ).run(msTestId, msTestProj1);
 
-const validMsAccess = testCheckMilestoneAccess(msTestId, msTestProj1, "org-1");
+const validMsAccess = checkDemoMilestoneAccess(msTestId, msTestProj1, "org-1");
 assert(
   validMsAccess.authorized && validMsAccess.milestone?.id === msTestId,
   "Milestone with correct parent project and org succeeds",
 );
 
-const crossOrgMsAccess = testCheckMilestoneAccess(
+const crossOrgMsAccess = checkDemoMilestoneAccess(
   msTestId,
   msTestProj1,
   "org-2",
@@ -404,7 +306,7 @@ assert(
   "Milestone access from different organization org-2 is rejected",
 );
 
-const crossProjMsAccess = testCheckMilestoneAccess(
+const crossProjMsAccess = checkDemoMilestoneAccess(
   msTestId,
   msTestProj2,
   "org-1",
@@ -414,15 +316,15 @@ assert(
   "Milestone assignment to mismatched project proj-2 is rejected",
 );
 
-// TEST 9: Real Tenant Isolation for API Keys
+// TEST 9: Real Tenant Isolation for API Keys (Calling REAL checkDemoApiKeyAccess)
 console.log("\nTEST 9: Real Tenant Isolation for API Keys");
-const validKeyAccess = testCheckApiKeyAccess(testKeyId, "org-1");
+const validKeyAccess = checkDemoApiKeyAccess(testKeyId, "org-1");
 assert(
   validKeyAccess.authorized && validKeyAccess.apiKey?.id === testKeyId,
   "Org-1 accesses its own API key",
 );
 
-const crossTenantKeyAccess = testCheckApiKeyAccess(testKeyId, "org-2");
+const crossTenantKeyAccess = checkDemoApiKeyAccess(testKeyId, "org-2");
 assert(
   !crossTenantKeyAccess.authorized &&
     crossTenantKeyAccess.error?.includes("API Key not found"),

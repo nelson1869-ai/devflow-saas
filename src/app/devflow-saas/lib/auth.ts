@@ -1,6 +1,5 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
 import { db } from "./db";
 
 export type UserRole = "Admin" | "Member" | "Viewer";
@@ -56,16 +55,4 @@ export async function getCurrentUser(): Promise<User> {
   // Default fallback
   const users = await getAllUsers();
   return users[0];
-}
-
-export async function switchActiveUserAction(userId: string): Promise<void> {
-  "use server";
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, userId, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-  });
-
-  revalidatePath("/devflow-saas", "layout");
 }

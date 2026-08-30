@@ -1,5 +1,6 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import type { ProjectStatus } from "../projects/types";
@@ -9,6 +10,19 @@ export type ActionResponse = Readonly<{
   success: boolean;
   error?: string;
 }>;
+
+const SESSION_COOKIE_NAME = "devflow_session_user_id";
+
+export async function switchActiveUserAction(userId: string): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE_NAME, userId, {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax",
+  });
+
+  revalidatePath("/devflow-saas", "layout");
+}
 
 export async function createProjectAction(
   formData: FormData,

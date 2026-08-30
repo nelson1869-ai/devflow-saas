@@ -1,11 +1,19 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { getCurrentUser, getAllUsers } from "./lib/auth";
+import { UserMenu } from "./components/UserMenu";
 
 type DevFlowLayoutProps = Readonly<{
   children: ReactNode;
 }>;
 
-export default function DevFlowLayout({ children }: DevFlowLayoutProps) {
+export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
+  // Server-side session resolution
+  const [currentUser, allUsers] = await Promise.all([
+    getCurrentUser(),
+    getAllUsers(),
+  ]);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
       {/* SaaS App Header */}
@@ -41,10 +49,13 @@ export default function DevFlowLayout({ children }: DevFlowLayoutProps) {
             </nav>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-0.5 text-xs font-medium text-cyan-300">
+          <div className="flex items-center gap-4">
+            <span className="hidden md:inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-0.5 text-xs font-medium text-cyan-300">
               Workspace: Acme Engineering
             </span>
+
+            {/* Active User Session Menu */}
+            <UserMenu currentUser={currentUser} allUsers={allUsers} />
           </div>
         </div>
       </header>

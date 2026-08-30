@@ -64,6 +64,17 @@ database.exec(`
     FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS devflow_tags (
+    id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL DEFAULT 'org-1',
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT 'cyan',
+    description TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE,
+    UNIQUE(org_id, name)
+  );
+
   CREATE TABLE IF NOT EXISTS devflow_comments (
     id TEXT PRIMARY KEY,
     task_id TEXT NOT NULL,
@@ -139,6 +150,21 @@ database.exec(`
     ('user-2', 'Sarah Connor', 'sarah@devflow.io', 'Member', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80'),
     ('user-3', 'Devin Zhao', 'devin@devflow.io', 'Member', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80');
 
+  -- Seed Tags (Acme Engineering: org-1)
+  INSERT OR IGNORE INTO devflow_tags (id, org_id, name, color, description) VALUES
+    ('tag-1', 'org-1', 'feature', 'sky', 'New product functionality & user stories'),
+    ('tag-2', 'org-1', 'bug', 'rose', 'Defects, regressions, and broken behavior'),
+    ('tag-3', 'org-1', 'frontend', 'purple', 'React components, Tailwind styling, and UI/UX'),
+    ('tag-4', 'org-1', 'backend', 'cyan', 'APIs, SQLite data models, and server actions'),
+    ('tag-5', 'org-1', 'security', 'emerald', 'Authentication, RBAC permissions, and auditing'),
+    ('tag-6', 'org-1', 'infra', 'amber', 'CI/CD, database migrations, and performance');
+
+  -- Seed Tags (Stark Industries: org-2)
+  INSERT OR IGNORE INTO devflow_tags (id, org_id, name, color, description) VALUES
+    ('tag-7', 'org-2', 'ai', 'cyan', 'Neural network pipelines and machine learning'),
+    ('tag-8', 'org-2', 'infra', 'amber', 'Hardware interlocks and energy containment'),
+    ('tag-9', 'org-2', 'security', 'emerald', 'Perimeter defense and access override');
+
   -- Seed Projects (Acme Engineering: org-1)
   INSERT OR IGNORE INTO devflow_projects (id, org_id, name, key, description, status) VALUES
     ('proj-1', 'org-1', 'Platform Core APIs', 'CORE', 'Core authentication, multi-tenant isolation, and rate limiting services.', 'Active'),
@@ -194,4 +220,4 @@ database.exec(`
 
 database.close();
 
-console.log("DevFlow database schema with notifications is ready.");
+console.log("DevFlow database schema with tags is ready.");

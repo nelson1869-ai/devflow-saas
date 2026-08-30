@@ -6,21 +6,25 @@ import {
   getCurrentOrg,
   getAllOrgs,
 } from "./lib/auth";
+import { getProjectsByOrgId } from "./lib/queries";
 import { UserMenu } from "./components/UserMenu";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
+import { CommandPalette } from "./components/CommandPalette";
 
 type DevFlowLayoutProps = Readonly<{
   children: ReactNode;
 }>;
 
 export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
-  // Server-side session resolution for both User and Organization
+  // Server-side session resolution
   const [currentUser, allUsers, currentOrg, allOrgs] = await Promise.all([
     getCurrentUser(),
     getAllUsers(),
     getCurrentOrg(),
     getAllOrgs(),
   ]);
+
+  const projects = getProjectsByOrgId(currentOrg.id);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 antialiased">
@@ -64,6 +68,13 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Global Command Palette (⌘K) */}
+            <CommandPalette
+              projects={projects}
+              allOrgs={allOrgs}
+              allUsers={allUsers}
+            />
+
             {/* Multi-Tenant Workspace Switcher */}
             <WorkspaceMenu currentOrg={currentOrg} allOrgs={allOrgs} />
 

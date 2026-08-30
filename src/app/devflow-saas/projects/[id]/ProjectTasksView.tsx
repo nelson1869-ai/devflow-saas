@@ -14,6 +14,7 @@ import type { ActivityItem } from "../../lib/activity-types";
 import { TaskCard } from "../../tasks/TaskCard";
 import { EditTaskModal } from "../../tasks/EditTaskModal";
 import { TaskAuditDrawer } from "../../tasks/TaskAuditDrawer";
+import { BulkActionBar } from "../../tasks/BulkActionBar";
 import {
   createTaskAction,
   updateTaskAction,
@@ -22,6 +23,11 @@ import {
   createCommentAction,
   addTaskDependencyAction,
   removeTaskDependencyAction,
+  bulkUpdateTaskStatusAction,
+  bulkUpdateTaskAssigneeAction,
+  bulkUpdateTaskPriorityAction,
+  bulkUpdateTaskTagAction,
+  bulkDeleteTasksAction,
 } from "../../lib/actions";
 
 type ProjectTasksViewProps = Readonly<{
@@ -112,6 +118,9 @@ export function ProjectTasksView({
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [historyTask, setHistoryTask] = useState<Task | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   const [isPending, startTransition] = useTransition();
 
   // Filter & Sort States
@@ -135,7 +144,7 @@ export function ProjectTasksView({
   const [assigneeName, setAssigneeName] = useState(currentUser.name);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // React 19 Render-time state synchronizations (zero effect cascades)
+  // React 19 Render-time state synchronizations (zero cascading renders)
   if (initialTasks !== prevInitialTasks) {
     setPrevInitialTasks(initialTasks);
     setTasks(initialTasks);
@@ -153,6 +162,18 @@ export function ProjectTasksView({
 
   const handleTagClick = (tagName: string) => {
     setSelectedTag((prev) => (prev === tagName ? "All" : tagName));
+  };
+
+  const handleToggleSelect = (taskId: string) => {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
   };
 
   const handleCreateTask = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -283,7 +304,6 @@ export function ProjectTasksView({
       dependsOnTaskStatus: blockerTask?.status || "Todo",
     };
 
-    // Optimistic UI update across tasks & editingTask
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id === taskId) {
@@ -316,7 +336,6 @@ export function ProjectTasksView({
   };
 
   const handleRemoveDependency = (dependencyId: string) => {
-    // Optimistic UI update across tasks & editingTask
     setTasks((prev) =>
       prev.map((t) => ({
         ...t,
@@ -346,7 +365,6 @@ export function ProjectTasksView({
   };
 
   const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
-    // Optimistic UI update: update this task AND update blocker status in all dependent tasks
     setTasks((prev) =>
       prev.map((task) => {
         if (task.id === taskId) {
@@ -381,11 +399,127 @@ export function ProjectTasksView({
     if (!confirmed) return;
 
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      next.delete(taskId);
+      return next;
+    });
 
     startTransition(async () => {
       const res = await deleteTaskAction(taskId, projectId);
       if (!res.success) {
         alert(res.error || "Failed to delete task.");
+        setTasks(initialTasks);
+      }
+    });
+  };
+
+  // ==========================================
+  // BULK BATCH ACTION HANDLERS (Phase 60)
+  // ==========================================
+
+  const handleBatchStatus = (newStatus: TaskStatus) => {
+    const ids = Array.from(selectedTaskIds);
+    if (ids.length === 0) return;
+
+    setTasks((prev) =>
+      prev.map((t) =>
+        selectedTaskIds.has(t.id) ? { ...t, status: newStatus } : t,
+      ),
+    );
+    setSelectedTaskIds(new Set());
+
+    startTransition(async () => {
+      const res = await bulkUpdateTaskStatusAction(ids, newStatus, projectId);
+      if (!res.success) {
+        alert(res.error || "Failed to batch move tasks.");
+        setTasks(initialTasks);
+      }
+    });
+  };
+
+  const handleBatchAssign = (newAssigneeName: string) => {
+    const ids = Array.from(selectedTaskIds);
+    if (ids.length === 0) return;
+
+    setTasks((prev) =>
+      prev.map((t) =>
+        selectedTaskIds.has(t.id) ? { ...t, assigneeName: newAssigneeName } : t,
+      ),
+    );
+    setSelectedTaskIds(new Set());
+
+    startTransition(async () => {
+      const res = await bulkUpdateTaskAssigneeAction(
+        ids,
+        newAssigneeName,
+        projectId,
+      );
+      if (!res.success) {
+        alert(res.error || "Failed to batch reassign tasks.");
+        setTasks(initialTasks);
+      }
+    });
+  };
+
+  const handleBatchPriority = (newPriority: TaskPriority) => {
+    const ids = Array.from(selectedTaskIds);
+    if (ids.length === 0) return;
+
+    setTasks((prev) =>
+      prev.map((t) =>
+        selectedTaskIds.has(t.id) ? { ...t, priority: newPriority } : t,
+      ),
+    );
+    setSelectedTaskIds(new Set());
+
+    startTransition(async () => {
+      const res = await bulkUpdateTaskPriorityAction(
+        ids,
+        newPriority,
+        projectId,
+      );
+      if (!res.success) {
+        alert(res.error || "Failed to batch update priorities.");
+        setTasks(initialTasks);
+      }
+    });
+  };
+
+  const handleBatchTag = (newTag: string) => {
+    const ids = Array.from(selectedTaskIds);
+    if (ids.length === 0) return;
+
+    setTasks((prev) =>
+      prev.map((t) => (selectedTaskIds.has(t.id) ? { ...t, tag: newTag } : t)),
+    );
+    setSelectedTaskIds(new Set());
+
+    startTransition(async () => {
+      const res = await bulkUpdateTaskTagAction(ids, newTag, projectId);
+      if (!res.success) {
+        alert(res.error || "Failed to batch update tags.");
+        setTasks(initialTasks);
+      }
+    });
+  };
+
+  const handleBatchDelete = () => {
+    const ids = Array.from(selectedTaskIds);
+    if (ids.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete all ${ids.length} selected tasks?`,
+    );
+    if (!confirmed) return;
+
+    setTasks((prev) => prev.filter((t) => !selectedTaskIds.has(t.id)));
+    setSelectedTaskIds(new Set());
+
+    startTransition(async () => {
+      const res = await bulkDeleteTasksAction(ids, projectId);
+      if (!res.success) {
+        alert(res.error || "Failed to batch delete tasks.");
         setTasks(initialTasks);
       }
     });
@@ -472,6 +606,18 @@ export function ProjectTasksView({
     sortBy,
   ]);
 
+  const allFilteredSelected =
+    filteredTasks.length > 0 &&
+    filteredTasks.every((t) => selectedTaskIds.has(t.id));
+
+  const handleToggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      setSelectedTaskIds(new Set());
+    } else {
+      setSelectedTaskIds(new Set(filteredTasks.map((t) => t.id)));
+    }
+  };
+
   return (
     <section aria-labelledby="tasks-section-heading" className="space-y-6">
       {/* Top Header Bar */}
@@ -538,6 +684,29 @@ export function ProjectTasksView({
 
       {/* Advanced Filter & Sort Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
+        {/* Select All Filtered Checkbox Button */}
+        {filteredTasks.length > 0 && (
+          <button
+            type="button"
+            onClick={handleToggleSelectAllFiltered}
+            title={
+              allFilteredSelected
+                ? "Deselect all filtered"
+                : "Select all filtered"
+            }
+            className={[
+              "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition",
+              allFilteredSelected
+                ? "border border-cyan-500/40 bg-cyan-500/10 text-cyan-300"
+                : "border border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700 hover:text-white",
+            ].join(" ")}
+          >
+            <span>
+              {allFilteredSelected ? "☑️ Deselect All" : "◻️ Select All"}
+            </span>
+          </button>
+        )}
+
         <div className="relative min-w-45 flex-1 sm:max-w-xs">
           <input
             type="search"
@@ -842,7 +1011,7 @@ export function ProjectTasksView({
         </div>
       )}
 
-      {/* Kanban Board View with Drag & Drop */}
+      {/* Kanban Board View with Drag & Drop & Bulk Selection */}
       {viewMode === "kanban" ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {kanbanColumns.map((col) => {
@@ -919,6 +1088,8 @@ export function ProjectTasksView({
                           onTagClick={handleTagClick}
                           onViewHistory={(t) => setHistoryTask(t)}
                           isDraggable={true}
+                          isSelected={selectedTaskIds.has(task.id)}
+                          onToggleSelect={handleToggleSelect}
                         />
                       ))}
                     </ul>
@@ -957,10 +1128,26 @@ export function ProjectTasksView({
               onTagClick={handleTagClick}
               onViewHistory={(t) => setHistoryTask(t)}
               isDraggable={false}
+              isSelected={selectedTaskIds.has(task.id)}
+              onToggleSelect={handleToggleSelect}
             />
           ))}
         </ul>
       )}
+
+      {/* Floating Bulk Multi-Task Action Bar */}
+      <BulkActionBar
+        selectedCount={selectedTaskIds.size}
+        allUsers={allUsers}
+        workspaceTags={workspaceTags}
+        onBatchStatus={handleBatchStatus}
+        onBatchAssign={handleBatchAssign}
+        onBatchPriority={handleBatchPriority}
+        onBatchTag={handleBatchTag}
+        onBatchDelete={handleBatchDelete}
+        onClearSelection={() => setSelectedTaskIds(new Set())}
+        isPending={isPending}
+      />
 
       {/* Edit Task Modal with Dependencies & Blocker Linking */}
       {editingTask && (

@@ -18,6 +18,8 @@ type TaskCardProps = Readonly<{
   onTagClick?: (tag: string) => void;
   onViewHistory?: (task: Task) => void;
   isDraggable?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (taskId: string) => void;
 }>;
 
 const priorityStyles: Readonly<Record<TaskPriority, string>> = {
@@ -49,6 +51,8 @@ export function TaskCard({
   onTagClick,
   onViewHistory,
   isDraggable = true,
+  isSelected = false,
+  onToggleSelect,
 }: TaskCardProps) {
   const [isDragging, setIsDragging] = useState(false);
 
@@ -102,7 +106,11 @@ export function TaskCard({
       onDragEnd={handleDragEnd}
       className={[
         "group relative flex flex-col justify-between rounded-xl border bg-slate-900/80 p-4 transition-all duration-150 shadow-sm",
-        isDragging ? "opacity-40 scale-95 border-cyan-400" : "border-slate-800",
+        isSelected
+          ? "border-cyan-400 bg-slate-900/95 ring-2 ring-cyan-400/40"
+          : isDragging
+            ? "opacity-40 scale-95 border-cyan-400"
+            : "border-slate-800",
         isDraggable
           ? "cursor-grab active:cursor-grabbing hover:border-slate-700"
           : "",
@@ -112,8 +120,18 @@ export function TaskCard({
       <div className="space-y-3">
         {/* Card Header Toolbar */}
         <div className="flex items-center justify-between gap-2">
-          {/* Tag and Drag Handle */}
-          <div className="flex items-center gap-1.5">
+          {/* Select Checkbox & Drag Handle & Status */}
+          <div className="flex items-center gap-2">
+            {onToggleSelect && (
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => onToggleSelect(task.id)}
+                aria-label={`Select task ${task.title}`}
+                className="h-3.5 w-3.5 rounded border-slate-700 bg-slate-950 text-cyan-400 focus:ring-cyan-400/40 cursor-pointer accent-cyan-400"
+              />
+            )}
+
             {isDraggable && (
               <span
                 aria-hidden="true"
@@ -303,7 +321,7 @@ export function TaskCard({
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-3 text-[11px] text-slate-400">
         <div className="flex items-center gap-1.5">
           <span className="text-slate-500 font-medium">Assignee:</span>
-          <span className="font-semibold text-slate-200 truncate max-w-30">
+          <span className="font-semibold text-slate-200 truncate max-w-[120px]">
             {task.assigneeName}
           </span>
         </div>

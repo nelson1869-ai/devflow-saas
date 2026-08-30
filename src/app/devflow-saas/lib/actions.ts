@@ -340,7 +340,6 @@ export async function createProjectAction(
 
     stmt.run(projectId, orgId, name, key, description, status);
 
-    // Auto-scaffold starter tasks if template is selected
     const template = projectTemplates.find((t) => t.id === templateId);
     if (template && template.starterTasks.length > 0) {
       const taskStmt = db.prepare(`
@@ -664,7 +663,6 @@ export async function createTaskAction(
         id,
       );
 
-      // Notify assignee if assigned to someone else
       const userStmt = db.prepare(
         "SELECT id FROM devflow_users WHERE name = ?",
       );
@@ -897,7 +895,6 @@ export async function createCommentAction(
         taskId,
       );
 
-      // Notify task assignee if someone else comments
       const userStmt = db.prepare(
         "SELECT id FROM devflow_users WHERE name = ?",
       );
@@ -923,5 +920,363 @@ export async function createCommentAction(
     return { success: true };
   } catch {
     return { success: false, error: "Failed to save comment to database." };
+  }
+}
+
+export async function addTaskDependencyAction(
+  taskId: string,
+  dependsOnTaskId: string,
+  projectId: string,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  if (taskId === dependsOnTaskId) {
+    return { success: false, error: "A task cannot depend on itself." };
+  }
+
+  try {
+    const id = `dep-${Date.now()}`;
+    const stmt = db.prepare(`
+      INSERT INTO devflow_task_dependencies (id, task_id, depends_on_task_id)
+      VALUES (?, ?, ?)
+    `);
+
+    stmt.run(id, taskId, dependsOnTaskId);
+
+    const taskStmt = db.prepare(
+      "SELECT title, project_id FROM devflow_tasks WHERE id = ?",
+    );
+    const targetTask = taskStmt.get(taskId) as
+      | { title: string; project_id: string }
+      | undefined;
+    const blockerTask = taskStmt.get(dependsOnTaskId) as
+      | { title: string }
+      | undefined;
+
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    if (project && targetTask && blockerTask) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "updated_task",
+        targetTask.title,
+        `Marked as blocked by "${blockerTask.title}".`,
+        taskId,
+      );
+    }
+
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
+    return { success: true };
+  } catch (err: unknown) {
+    if (
+      err instanceof Error &&
+      err.message.includes("UNIQUE constraint failed")
+    ) {
+      return { success: false, error: "This dependency is already linked." };
+    }
+    return { success: false, error: "Failed to link task dependency." };
+  }
+}
+
+export async function removeTaskDependencyAction(
+  dependencyId: string,
+  projectId: string,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  try {
+    const depStmt = db.prepare(`
+      SELECT d.task_id, t.title
+      FROM devflow_task_dependencies d
+      JOIN devflow_tasks t ON t.id = d.task_id
+      WHERE d.id = ?
+    `);
+    const dep = depStmt.get(dependencyId) as
+      | { task_id: string; title: string }
+      | undefined;
+
+    const stmt = db.prepare(
+      "DELETE FROM devflow_task_dependencies WHERE id = ?",
+    );
+    stmt.run(dependencyId);
+
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    if (project && dep) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "updated_task",
+        dep.title,
+        "Removed dependency blocker link.",
+        dep.task_id,
+      );
+    }
+
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to remove task dependency." };
+  }
+}
+
+// ==========================================
+// BULK TASK OPERATIONS (Phase 60)
+// ==========================================
+
+export async function bulkUpdateTaskStatusAction(
+  taskIds: readonly string[],
+  newStatus: TaskStatus,
+  projectId: string,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  if (taskIds.length === 0) return { success: true };
+
+  try {
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    const placeholders = taskIds.map(() => "?").join(",");
+    const stmt = db.prepare(`
+      UPDATE devflow_tasks
+      SET status = ?
+      WHERE id IN (${placeholders})
+    `);
+
+    stmt.run(newStatus, ...taskIds);
+
+    if (project) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "updated_task_status",
+        `${taskIds.length} tasks`,
+        `Batch moved ${taskIds.length} tasks to ${newStatus}.`,
+      );
+    }
+
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
+    revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to batch update task statuses." };
+  }
+}
+
+export async function bulkUpdateTaskAssigneeAction(
+  taskIds: readonly string[],
+  newAssigneeName: string,
+  projectId: string,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  if (taskIds.length === 0) return { success: true };
+
+  try {
+    const projectStmt = db.prepare(
+      "SELECT org_id, name FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string; name: string }
+      | undefined;
+
+    const placeholders = taskIds.map(() => "?").join(",");
+    const stmt = db.prepare(`
+      UPDATE devflow_tasks
+      SET assignee_name = ?
+      WHERE id IN (${placeholders})
+    `);
+
+    stmt.run(newAssigneeName, ...taskIds);
+
+    if (project) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "updated_task",
+        `${taskIds.length} tasks`,
+        `Batch reassigned ${taskIds.length} tasks to ${newAssigneeName}.`,
+      );
+
+      const userStmt = db.prepare(
+        "SELECT id FROM devflow_users WHERE name = ?",
+      );
+      const assignee = userStmt.get(newAssigneeName) as
+        | { id: string }
+        | undefined;
+      if (assignee && assignee.id !== currentUser.id) {
+        createNotification(
+          assignee.id,
+          project.org_id,
+          "Batch Tasks Assigned",
+          `${currentUser.name} assigned you ${taskIds.length} tasks in ${project.name}.`,
+          "assignment",
+          `/devflow-saas/projects/${projectId}`,
+        );
+      }
+    }
+
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
+    revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to batch reassign tasks." };
+  }
+}
+
+export async function bulkUpdateTaskPriorityAction(
+  taskIds: readonly string[],
+  newPriority: TaskPriority,
+  projectId: string,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  if (taskIds.length === 0) return { success: true };
+
+  try {
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    const placeholders = taskIds.map(() => "?").join(",");
+    const stmt = db.prepare(`
+      UPDATE devflow_tasks
+      SET priority = ?
+      WHERE id IN (${placeholders})
+    `);
+
+    stmt.run(newPriority, ...taskIds);
+
+    if (project) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "updated_task",
+        `${taskIds.length} tasks`,
+        `Batch set ${taskIds.length} tasks priority to ${newPriority}.`,
+      );
+    }
+
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
+    revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to batch update priorities." };
+  }
+}
+
+export async function bulkUpdateTaskTagAction(
+  taskIds: readonly string[],
+  newTag: string,
+  projectId: string,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  if (taskIds.length === 0) return { success: true };
+
+  try {
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    const placeholders = taskIds.map(() => "?").join(",");
+    const stmt = db.prepare(`
+      UPDATE devflow_tasks
+      SET tag = ?
+      WHERE id IN (${placeholders})
+    `);
+
+    stmt.run(newTag, ...taskIds);
+
+    if (project) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "updated_task",
+        `${taskIds.length} tasks`,
+        `Batch tagged ${taskIds.length} tasks as #${newTag}.`,
+      );
+    }
+
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/tags");
+    revalidatePath("/devflow-saas/activity");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to batch update tags." };
+  }
+}
+
+export async function bulkDeleteTasksAction(
+  taskIds: readonly string[],
+  projectId: string,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  if (taskIds.length === 0) return { success: true };
+
+  try {
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    const placeholders = taskIds.map(() => "?").join(",");
+    const stmt = db.prepare(`
+      DELETE FROM devflow_tasks
+      WHERE id IN (${placeholders})
+    `);
+
+    stmt.run(...taskIds);
+
+    if (project) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "deleted_task",
+        `${taskIds.length} tasks`,
+        `Batch deleted ${taskIds.length} tasks from project.`,
+      );
+    }
+
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
+    revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to batch delete tasks." };
   }
 }

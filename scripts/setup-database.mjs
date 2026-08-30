@@ -61,6 +61,18 @@ database.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS devflow_activity (
+    id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL,
+    project_id TEXT,
+    user_name TEXT NOT NULL,
+    action TEXT NOT NULL,
+    entity_title TEXT NOT NULL,
+    details TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE
+  );
 `);
 
 // Migration: ensure org_id column exists on existing devflow_projects table
@@ -106,10 +118,18 @@ database.exec(`
   INSERT OR IGNORE INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name) VALUES
     ('task-401', 'proj-4', 'Thermal Safety Interlocks', 'Calibrate magnetic containment sensors for 100GW output spikes.', 'In Progress', 'Urgent', 'Nelson Rivera'),
     ('task-501', 'proj-5', 'Optimize Attention Mechanism', 'Quantize transformer weights for on-device flight helmet compute.', 'Todo', 'High', 'Devin Zhao');
+
+  -- Seed Activity Log
+  INSERT OR IGNORE INTO devflow_activity (id, org_id, project_id, user_name, action, entity_title, details, created_at) VALUES
+    ('act-1', 'org-1', 'proj-1', 'Nelson Rivera', 'created_project', 'Platform Core APIs', 'Initial project repository established.', datetime('now', '-2 hours')),
+    ('act-2', 'org-1', 'proj-1', 'Sarah Connor', 'created_task', 'Database Isolation Unit Tests', 'Assigned to Sarah Connor with Medium priority.', datetime('now', '-90 minutes')),
+    ('act-3', 'org-1', 'proj-1', 'Nelson Rivera', 'updated_task_status', 'Implement JWT Session Verification', 'Status moved from Todo to In Progress.', datetime('now', '-45 minutes')),
+    ('act-4', 'org-2', 'proj-4', 'Nelson Rivera', 'created_project', 'Arc Reactor Grid Management', 'Clean energy telemetry initialized.', datetime('now', '-3 hours')),
+    ('act-5', 'org-2', 'proj-4', 'Nelson Rivera', 'created_task', 'Thermal Safety Interlocks', 'Marked Urgent priority.', datetime('now', '-1 hour'));
 `);
 
 database.close();
 
 console.log(
-  "DevFlow multi-tenant SQL database schema and seed data are ready.",
+  "DevFlow multi-tenant SQL database schema and activity log are ready.",
 );

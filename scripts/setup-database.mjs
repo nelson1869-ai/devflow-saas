@@ -62,6 +62,17 @@ database.exec(`
     FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS devflow_comments (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    user_name TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (task_id) REFERENCES devflow_tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS devflow_activity (
     id TEXT PRIMARY KEY,
     org_id TEXT NOT NULL,
@@ -119,6 +130,12 @@ database.exec(`
     ('task-401', 'proj-4', 'Thermal Safety Interlocks', 'Calibrate magnetic containment sensors for 100GW output spikes.', 'In Progress', 'Urgent', 'Nelson Rivera'),
     ('task-501', 'proj-5', 'Optimize Attention Mechanism', 'Quantize transformer weights for on-device flight helmet compute.', 'Todo', 'High', 'Devin Zhao');
 
+  -- Seed Comments
+  INSERT OR IGNORE INTO devflow_comments (id, task_id, user_id, user_name, content, created_at) VALUES
+    ('comm-1', 'task-101', 'user-2', 'Sarah Connor', 'Verified the RSA public key rotation logic. Looking solid!', datetime('now', '-25 minutes')),
+    ('comm-2', 'task-101', 'user-1', 'Nelson Rivera', 'Thanks Sarah! Adding unit tests for tenant claims decoding now.', datetime('now', '-10 minutes')),
+    ('comm-3', 'task-102', 'user-1', 'Nelson Rivera', 'We should use Redis token bucket algorithm with a 60-second window.', datetime('now', '-45 minutes'));
+
   -- Seed Activity Log
   INSERT OR IGNORE INTO devflow_activity (id, org_id, project_id, user_name, action, entity_title, details, created_at) VALUES
     ('act-1', 'org-1', 'proj-1', 'Nelson Rivera', 'created_project', 'Platform Core APIs', 'Initial project repository established.', datetime('now', '-2 hours')),
@@ -130,6 +147,4 @@ database.exec(`
 
 database.close();
 
-console.log(
-  "DevFlow multi-tenant SQL database schema and activity log are ready.",
-);
+console.log("DevFlow database schema with task comments is ready.");

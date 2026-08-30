@@ -19,6 +19,12 @@
 /data/*.db-shm
 /data/*.db-wal
 
+# DevFlow root SQLite developer database
+/devflow.db
+/devflow.db-journal
+/devflow.db-shm
+/devflow.db-wal
+
 # next.js
 /.next/
 /out/

@@ -38,6 +38,7 @@ type SynthesizedTaskPreview = Readonly<{
   priority: string;
   tag: string;
   estimatedHours: number;
+  isExisting?: boolean;
 }>;
 
 export function ProjectSettingsView({
@@ -55,7 +56,7 @@ export function ProjectSettingsView({
   const [status, setStatus] = useState<ProjectStatus>(project.status);
 
   const [feedback, setFeedback] = useState<{
-    type: "success" | "error";
+    type: "success" | "error" | "info";
     message: string;
   } | null>(null);
   const [updatedSummary, setUpdatedSummary] = useState<UpdatedSummary | null>(
@@ -334,7 +335,7 @@ ${inProgressList || "_No tasks currently in flight._"}
     setAiRetrospective(retro);
   };
 
-  // Generate Phase 2 Tasks with AI and push to board + show live preview
+  // Generate Phase 2 Tasks with AI with Idempotency Awareness
   const handleGenerateNextPhase = (customText?: string) => {
     const promptToUse = (customText || aiPhasePrompt).trim();
     if (!promptToUse) return;
@@ -352,9 +353,10 @@ ${inProgressList || "_No tasks currently in flight._"}
           `Phase 2 Expansion for ${name || project.name}`,
         );
 
-        setRecentSynthesizedTasks(plan.tasks);
-
+        let newAddedCount = 0;
+        let existingCount = 0;
         const newCreatedTasks: Task[] = [];
+        const taskPreviews: SynthesizedTaskPreview[] = [];
 
         for (const task of plan.tasks) {
           const formData = new FormData();
@@ -368,7 +370,24 @@ ${inProgressList || "_No tasks currently in flight._"}
           formData.append("assigneeName", currentUser.name);
 
           const res = await createTaskAction(formData);
-          if (res.success) {
+          const isDuplicate = Boolean(
+            res.data &&
+            typeof res.data === "object" &&
+            "isDuplicate" in res.data,
+          );
+
+          if (isDuplicate) {
+            existingCount++;
+            taskPreviews.push({
+              ...task,
+              isExisting: true,
+            });
+          } else if (res.success) {
+            newAddedCount++;
+            taskPreviews.push({
+              ...task,
+              isExisting: false,
+            });
             newCreatedTasks.push({
               id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
               projectId: project.id,
@@ -383,8 +402,24 @@ ${inProgressList || "_No tasks currently in flight._"}
           }
         }
 
-        if (onTasksAdded && newCreatedTasks.length > 0) {
-          onTasksAdded(newCreatedTasks);
+        setRecentSynthesizedTasks(taskPreviews);
+
+        if (newAddedCount > 0) {
+          if (onTasksAdded) {
+            onTasksAdded(newCreatedTasks);
+          }
+          setFeedback({
+            type: "success",
+            message:
+              existingCount > 0
+                ? `✨ Added ${newAddedCount} new Phase 2 tasks (${existingCount} were already on your board).`
+                : `✨ AI successfully synthesized and created ${newAddedCount} new Phase 2 tasks!`,
+          });
+        } else {
+          setFeedback({
+            type: "info",
+            message: `ℹ️ All ${existingCount} Phase 2 tasks are already present on your board! (Zero duplicates created).`,
+          });
         }
 
         router.refresh();
@@ -527,10 +562,12 @@ ${inProgressList || "_No tasks currently in flight._"}
         <div
           role="alert"
           className={[
-            "rounded-2xl p-4 text-xs font-semibold border",
+            "rounded-2xl p-4 text-xs font-semibold border animate-in fade-in",
             feedback.type === "success"
               ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-              : "border-rose-500/40 bg-rose-500/10 text-rose-300",
+              : feedback.type === "info"
+                ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-300"
+                : "border-rose-500/40 bg-rose-500/10 text-rose-300",
           ].join(" ")}
         >
           {feedback.message}
@@ -811,15 +848,15 @@ ${inProgressList || "_No tasks currently in flight._"}
             </div>
           </div>
 
-          {/* Live Synthesized Tasks Preview Box */}
+          {/* Live Synthesized Tasks Preview Box with Status Badges */}
           {recentSynthesizedTasks.length > 0 && (
             <div className="mt-4 rounded-xl border border-cyan-500/40 bg-cyan-500/10 p-4 space-y-3 animate-in fade-in duration-200">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-cyan-500/20 pb-2.5">
                 <div className="flex items-center gap-2">
                   <span className="text-base">✨</span>
                   <span className="text-xs font-bold text-white">
-                    Just Created {recentSynthesizedTasks.length} Phase 2
-                    Deliverables!
+                    Phase 2 Tasks Status ({recentSynthesizedTasks.length}{" "}
+                    Deliverables)
                   </span>
                 </div>
 
@@ -835,14 +872,25 @@ ${inProgressList || "_No tasks currently in flight._"}
               </div>
 
               <div className="space-y-2">
-                {recentSynthesizedTasks.map((t, idx) => (
+                {recentSynthesizedTasks.map((t) => (
                   <div
                     key={t.title}
                     className="flex items-start justify-between gap-2 rounded-lg border border-cyan-500/20 bg-slate-950/70 p-2.5 text-xs"
                   >
                     <div className="space-y-1">
-                      <div className="font-semibold text-slate-100">
-                        {t.title}
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-100">
+                          {t.title}
+                        </span>
+                        {t.isExisting ? (
+                          <span className="rounded bg-amber-500/20 px-1.5 py-0.5 font-mono text-[9px] font-bold text-amber-300">
+                            ● Already on Board
+                          </span>
+                        ) : (
+                          <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 font-mono text-[9px] font-bold text-emerald-300">
+                            ✨ Newly Added
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-slate-400 line-clamp-1">
                         {t.description}

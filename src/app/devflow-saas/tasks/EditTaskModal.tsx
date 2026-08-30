@@ -235,7 +235,7 @@ export function EditTaskModal({
                 className="mt-1.5 w-full font-mono rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
               />
             ) : (
-              <div className="mt-1.5 min-h-[100px] rounded-lg border border-slate-800 bg-slate-950/80 p-3">
+              <div className="mt-1.5 min-h-100px rounded-lg border border-slate-800 bg-slate-950/80 p-3">
                 <MarkdownView content={description} />
               </div>
             )}

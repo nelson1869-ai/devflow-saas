@@ -96,6 +96,18 @@ export function CommandPalette({
     });
 
     items.push({
+      id: "nav-calendar",
+      category: "Navigation",
+      title: "Go to Delivery Calendar",
+      subtitle: "Monthly deliverables and deadline tracker",
+      icon: "📅",
+      onSelect: () => {
+        router.push("/devflow-saas/calendar");
+        setIsOpen(false);
+      },
+    });
+
+    items.push({
       id: "nav-search",
       category: "Navigation",
       title: "Go to Global Search",

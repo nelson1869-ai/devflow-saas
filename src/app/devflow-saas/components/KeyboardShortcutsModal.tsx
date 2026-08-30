@@ -19,6 +19,7 @@ const shortcutGroups: readonly ShortcutCategory[] = [
       { keys: ["⌘", "K"], description: "Open Command Palette & Quick Search" },
       { keys: ["/"], description: "Jump directly to Global Full-Text Search" },
       { keys: ["?"], description: "Open this Keyboard Shortcuts Cheat Sheet" },
+      { keys: ["G", "C"], description: "Go to Delivery Calendar" },
       { keys: ["G", "S"], description: "Go to Global Search" },
       { keys: ["G", "P"], description: "Go to Projects Dashboard" },
       {
@@ -40,6 +41,10 @@ const shortcutGroups: readonly ShortcutCategory[] = [
       {
         keys: ["Click", "✏️"],
         description: "Open Task Details & Discussion notes",
+      },
+      {
+        keys: ["Click", "☑️"],
+        description: "Toggle markdown checklist items directly",
       },
       { keys: ["Click", "#tag"], description: "Filter board by domain tag" },
     ],
@@ -115,7 +120,11 @@ export function KeyboardShortcutsModal() {
 
       if (isRecentG) {
         const pressed = e.key.toLowerCase();
-        if (pressed === "s") {
+        if (pressed === "c") {
+          e.preventDefault();
+          router.push("/devflow-saas/calendar");
+          setIsOpen(false);
+        } else if (pressed === "s") {
           e.preventDefault();
           router.push("/devflow-saas/search");
           setIsOpen(false);

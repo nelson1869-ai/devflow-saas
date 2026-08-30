@@ -152,7 +152,11 @@ export function ProjectDetailClient({
           allUsers={allUsers}
         />
       ) : (
-        <ProjectSettingsView project={project} currentUser={currentUser} />
+        <ProjectSettingsView
+          project={project}
+          tasks={initialTasks}
+          currentUser={currentUser}
+        />
       )}
     </div>
   );

@@ -18,6 +18,7 @@ type AiTaskCopilotModalProps = Readonly<{
     description: string;
     priority: TaskPriority;
     estimatedHours: number;
+    tag?: string;
     subtasks: readonly string[];
   }) => void;
 }>;
@@ -71,6 +72,7 @@ export function AiTaskCopilotModal({
       description: aiData.enhancedDescription,
       priority: aiData.suggestedPriority,
       estimatedHours: aiData.suggestedEstimatedHours,
+      tag: aiData.suggestedTag,
       subtasks: selectedSubtasks,
     });
 
@@ -100,19 +102,13 @@ export function AiTaskCopilotModal({
           <div className="flex items-center gap-2">
             <span className="text-xl">🤖</span>
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <span>Gemini AI Task Copilot</span>
-                {aiData?.source === "gemini-api" ? (
-                  <span className="rounded bg-purple-500/20 px-2 py-0.5 text-[10px] font-mono text-purple-300 border border-purple-500/30">
-                    ✨ Gemini 1.5
-                  </span>
-                ) : (
-                  <span className="rounded bg-cyan-500/20 px-2 py-0.5 text-[10px] font-mono text-cyan-300 border border-cyan-500/30">
-                    ⚡ Smart Engine
-                  </span>
-                )}
-              </h3>
-              <p className="text-xs text-slate-400">
+                <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] font-semibold text-purple-300 border border-purple-500/30">
+                  ⚡ Smart Engine
+                </span>
+              </h2>
+              <p className="text-[11px] text-slate-400 mt-0.5">
                 Auto-generate acceptance criteria, checklist subtasks, and
                 effort estimation.
               </p>
@@ -122,7 +118,8 @@ export function AiTaskCopilotModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+            aria-label="Close dialog"
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
           >
             ✕
           </button>
@@ -191,8 +188,8 @@ export function AiTaskCopilotModal({
         {/* Generated AI Results */}
         {aiData && !isPending && (
           <div className="space-y-4 animate-in fade-in duration-200">
-            {/* Suggested Metrics */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Suggested Metrics with Auto-Tag */}
+            <div className="grid grid-cols-3 gap-3">
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                 <span className="block text-[10px] text-slate-400">
                   Suggested Effort:
@@ -207,6 +204,14 @@ export function AiTaskCopilotModal({
                 </span>
                 <span className="text-sm font-bold text-amber-300">
                   🔥 {aiData.suggestedPriority} Priority
+                </span>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <span className="block text-[10px] text-slate-400">
+                  Auto Domain Tag:
+                </span>
+                <span className="text-sm font-bold text-purple-300 font-mono">
+                  🏷️ #{aiData.suggestedTag}
                 </span>
               </div>
             </div>
@@ -262,29 +267,29 @@ export function AiTaskCopilotModal({
               </div>
             )}
 
-            {/* Actions */}
-            <div className="flex items-center justify-between border-t border-slate-800 pt-4">
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between border-t border-slate-800 pt-3">
               <button
                 type="button"
                 onClick={handleGenerate}
-                className="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-white transition"
+                className="text-xs font-semibold text-purple-400 hover:text-purple-300 transition flex items-center gap-1.5"
               >
                 <span>🔄</span>
                 <span>Re-generate</span>
               </button>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-xl border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+                  className="rounded-lg border border-slate-700 px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleApply}
-                  className="rounded-xl bg-purple-500 px-4 py-2 text-xs font-bold text-white hover:bg-purple-400 transition shadow-lg shadow-purple-950/50"
+                  className="rounded-lg bg-purple-500 px-4 py-1.5 text-xs font-bold text-white hover:bg-purple-400 transition shadow-md shadow-purple-950/40"
                 >
                   ✨ Apply AI Breakdown to Task
                 </button>

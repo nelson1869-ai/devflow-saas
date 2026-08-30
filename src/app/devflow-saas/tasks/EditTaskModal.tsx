@@ -254,18 +254,19 @@ export function EditTaskModal({
             ) : (
               <textarea
                 id="edit-task-description"
-                rows={4}
+                rows={5}
                 required
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Acceptance criteria, code references, or checklist items..."
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 leading-relaxed"
+                placeholder="Detail technical requirements, API contracts, edge cases..."
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-xs font-mono text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               />
             )}
           </div>
 
-          {/* Metadata Grid (Status, Priority, Assignee, Tag, Due Date, Est Hours) */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {/* Task Metadata Fields Grid */}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {/* Status */}
             <div>
               <label
                 htmlFor="edit-task-status"
@@ -277,7 +278,7 @@ export function EditTaskModal({
                 id="edit-task-status"
                 value={status}
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               >
                 <option value="Todo">Todo</option>
                 <option value="In Progress">In Progress</option>
@@ -286,6 +287,7 @@ export function EditTaskModal({
               </select>
             </div>
 
+            {/* Priority */}
             <div>
               <label
                 htmlFor="edit-task-priority"
@@ -297,7 +299,7 @@ export function EditTaskModal({
                 id="edit-task-priority"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
@@ -306,6 +308,7 @@ export function EditTaskModal({
               </select>
             </div>
 
+            {/* Assignee */}
             <div>
               <label
                 htmlFor="edit-task-assignee"
@@ -317,16 +320,17 @@ export function EditTaskModal({
                 id="edit-task-assignee"
                 value={assigneeName}
                 onChange={(e) => setAssigneeName(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               >
-                {allUsers.map((user) => (
-                  <option key={user.id} value={user.name}>
-                    {user.name} ({user.role})
+                {allUsers.map((u) => (
+                  <option key={u.id} value={u.name}>
+                    {u.name} ({u.role})
                   </option>
                 ))}
               </select>
             </div>
 
+            {/* Domain Tag */}
             <div>
               <label
                 htmlFor="edit-task-tag"
@@ -334,81 +338,103 @@ export function EditTaskModal({
               >
                 Domain Tag
               </label>
-              <select
+              <input
                 id="edit-task-tag"
+                type="text"
+                list="workspace-tags-list"
                 value={tag}
-                onChange={(e) => setTag(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 font-mono lowercase"
-              >
+                onChange={(e) =>
+                  setTag(
+                    e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""),
+                  )
+                }
+                placeholder="e.g. backend, ui, auth"
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-200 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+              />
+              <datalist id="workspace-tags-list">
                 {workspaceTags.map((t) => (
-                  <option key={t.id} value={t.name}>
-                    #{t.name}
-                  </option>
+                  <option key={t.id} value={t.name} />
                 ))}
-              </select>
+              </datalist>
             </div>
 
+            {/* Due Date */}
             <div>
               <label
-                htmlFor="edit-task-due"
+                htmlFor="edit-task-due-date"
                 className="block text-xs font-medium text-slate-300"
               >
                 Due Date
               </label>
               <input
-                id="edit-task-due"
+                id="edit-task-due-date"
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               />
             </div>
 
+            {/* Estimated Hours */}
             <div>
               <label
-                htmlFor="edit-task-est-hours"
+                htmlFor="edit-task-hours"
                 className="block text-xs font-medium text-slate-300"
               >
                 Est. Hours (h)
               </label>
               <input
-                id="edit-task-est-hours"
+                id="edit-task-hours"
                 type="number"
-                step="0.5"
                 min="0"
-                max="500"
+                max="100"
+                step="0.5"
                 value={estimatedHours || ""}
                 onChange={(e) =>
                   setEstimatedHours(parseFloat(e.target.value) || 0)
                 }
-                placeholder="e.g. 8"
-                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-200 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               />
             </div>
           </div>
 
-          {/* Task Dependency Blockers Section */}
-          <div className="border-t border-slate-800 pt-5 space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Task Dependencies & Blockers
-            </h3>
+          {/* Task Dependencies & Blockers Section (Phase 67) */}
+          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Task Dependencies & Blockers
+              </h3>
+              {(task.blockedBy || []).length > 0 && (
+                <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-400 border border-rose-500/20">
+                  ⚠️ Blocked by {(task.blockedBy || []).length} Task(s)
+                </span>
+              )}
+            </div>
 
-            {(task.blockedBy || []).length > 0 ? (
+            {/* Current Active Blockers List */}
+            {(task.blockedBy || []).length === 0 ? (
+              <p className="text-xs text-slate-500 italic">
+                No active prerequisite blockers linked.
+              </p>
+            ) : (
               <ul className="space-y-2">
                 {(task.blockedBy || []).map((dep) => (
                   <li
                     key={dep.id}
-                    className="flex items-center justify-between rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs"
+                    className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs"
                   >
                     <div className="flex items-center gap-2">
-                      <span>⛔</span>
-                      <span className="text-slate-200">
-                        Blocked by:{" "}
-                        <strong className="text-white">
-                          {dep.dependsOnTaskTitle}
-                        </strong>
+                      <span className="font-mono text-[10px] text-slate-500">
+                        {dep.dependsOnTaskId}
                       </span>
-                      <span className="rounded bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-mono text-slate-400">
+                      <span className="font-semibold text-slate-200">
+                        {dep.dependsOnTaskTitle}
+                      </span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                          statusStyles[dep.dependsOnTaskStatus]
+                        }`}
+                      >
                         {dep.dependsOnTaskStatus}
                       </span>
                     </div>
@@ -416,10 +442,9 @@ export function EditTaskModal({
                     {onRemoveDependency && (
                       <button
                         type="button"
-                        disabled={isPending}
                         onClick={() => onRemoveDependency(dep.id)}
-                        className="rounded p-1 text-slate-400 hover:bg-rose-500/20 hover:text-rose-300 transition"
-                        title="Remove blocker link"
+                        className="text-slate-500 hover:text-rose-400 transition"
+                        title="Remove blocker dependency"
                       >
                         ✕
                       </button>
@@ -427,39 +452,36 @@ export function EditTaskModal({
                   </li>
                 ))}
               </ul>
-            ) : (
-              <p className="text-xs text-slate-500 italic">
-                No active prerequisite blockers linked.
-              </p>
             )}
 
-            {availableBlockerTasks.length > 0 && onAddDependency && (
+            {/* Add New Blocker Dependency Form */}
+            {onAddDependency && availableBlockerTasks.length > 0 && (
               <div className="flex items-center gap-2 pt-1">
                 <select
                   value={selectedBlockerId}
                   onChange={(e) => setSelectedBlockerId(e.target.value)}
-                  className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
                 >
                   <option value="">
                     Select a prerequisite task to link as blocker...
                   </option>
                   {availableBlockerTasks.map((t) => (
                     <option key={t.id} value={t.id}>
-                      [{t.status}] {t.title}
+                      {t.title} ({t.status})
                     </option>
                   ))}
                 </select>
 
                 <button
                   type="button"
-                  disabled={!selectedBlockerId || isPending}
+                  disabled={!selectedBlockerId}
                   onClick={() => {
                     if (selectedBlockerId) {
                       onAddDependency(task.id, selectedBlockerId);
                       setSelectedBlockerId("");
                     }
                   }}
-                  className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-500/30 disabled:opacity-40 transition"
+                  className="shrink-0 rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40 transition"
                 >
                   + Link Blocker
                 </button>
@@ -468,7 +490,7 @@ export function EditTaskModal({
           </div>
 
           {/* Form Actions */}
-          <div className="flex justify-end gap-3 border-t border-slate-800 pt-4">
+          <div className="flex items-center justify-end gap-3 border-t border-slate-800 pt-4">
             <button
               type="button"
               onClick={onClose}
@@ -478,15 +500,15 @@ export function EditTaskModal({
             </button>
             <button
               type="submit"
-              disabled={isPending || !title.trim()}
-              className="rounded-xl bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-40 transition"
+              disabled={isPending}
+              className="rounded-xl bg-cyan-400 px-5 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-300 disabled:opacity-40 transition shadow-md"
             >
-              {isPending ? "Saving..." : "Save Changes"}
+              {isPending ? "Saving Changes..." : "Save Changes"}
             </button>
           </div>
         </form>
 
-        {/* Subtasks & Checklist Section (Phase 67) */}
+        {/* Subtasks Checklist Section (Phase 64) */}
         <div className="border-t border-slate-800 pt-6">
           <SubtasksSection
             task={task}
@@ -495,7 +517,7 @@ export function EditTaskModal({
           />
         </div>
 
-        {/* File Attachments & Artifact Previews (Phase 72) */}
+        {/* Attachments & Artifacts (Phase 68) */}
         <div className="border-t border-slate-800 pt-6">
           <AttachmentsSection
             task={task}
@@ -592,10 +614,12 @@ export function EditTaskModal({
               description: newDesc,
               priority: newPriority,
               estimatedHours: newHours,
+              tag: newTag,
             }) => {
               setDescription(newDesc);
               setPriority(newPriority);
               setEstimatedHours(newHours);
+              if (newTag) setTag(newTag);
             }}
           />
         )}

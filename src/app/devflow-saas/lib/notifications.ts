@@ -1,7 +1,12 @@
 import "server-only";
 import { db } from "./db";
 
-export type NotificationType = "assignment" | "comment" | "status" | "system";
+export type NotificationType =
+  | "assignment"
+  | "comment"
+  | "status"
+  | "system"
+  | "mention";
 
 export type AppNotification = Readonly<{
   id: string;
@@ -40,6 +45,7 @@ export function getNotificationsForUser(
   `);
 
   const rows = stmt.all(userId, orgId) as NotificationRow[];
+
   return rows.map((r) => ({
     id: r.id,
     userId: r.user_id,
@@ -58,8 +64,8 @@ export function createNotification(
   orgId: string,
   title: string,
   message: string,
-  type: NotificationType,
-  linkUrl: string,
+  type: NotificationType = "system",
+  linkUrl: string = "/devflow-saas",
 ): void {
   const id = `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const stmt = db.prepare(`

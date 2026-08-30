@@ -6,9 +6,12 @@ import type { User } from "../lib/auth";
 import type { TaskComment } from "../lib/comments";
 import type { WorkspaceTag } from "../lib/tags";
 import { MarkdownView } from "../components/MarkdownView";
+import { MentionAutocompleteInput } from "../components/MentionAutocompleteInput";
+import { MentionText } from "../components/MentionText";
 
 type EditTaskModalProps = Readonly<{
   task: Task;
+  allProjectTasks?: readonly Task[];
   allUsers: readonly User[];
   currentUser: User;
   comments: readonly TaskComment[];
@@ -17,11 +20,21 @@ type EditTaskModalProps = Readonly<{
   onClose: () => void;
   onSave: (updatedTask: Task) => void;
   onAddComment: (content: string) => void;
+  onAddDependency?: (taskId: string, dependsOnTaskId: string) => void;
+  onRemoveDependency?: (dependencyId: string) => void;
   isPending?: boolean;
 }>;
 
+const statusStyles: Readonly<Record<TaskStatus, string>> = {
+  Todo: "bg-slate-800 text-slate-300 border-slate-700",
+  "In Progress": "bg-cyan-500/10 text-cyan-400 border-cyan-500/30",
+  Review: "bg-purple-500/10 text-purple-400 border-purple-500/30",
+  Done: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+};
+
 export function EditTaskModal({
   task,
+  allProjectTasks = [],
   allUsers,
   currentUser,
   comments,
@@ -30,44 +43,64 @@ export function EditTaskModal({
   onClose,
   onSave,
   onAddComment,
+  onAddDependency,
+  onRemoveDependency,
   isPending = false,
 }: EditTaskModalProps) {
+  // Local Form Draft State with React 19 State Synchronization
+  const [prevTask, setPrevTask] = useState(task);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
-  const [descTab, setDescTab] = useState<"write" | "preview">("write");
   const [status, setStatus] = useState<TaskStatus>(task.status);
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const [tag, setTag] = useState<string>(task.tag);
-  const [dueDate, setDueDate] = useState(task.dueDate || "");
   const [assigneeName, setAssigneeName] = useState(task.assigneeName);
+  const [dueDate, setDueDate] = useState(task.dueDate || "");
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [selectedBlockerId, setSelectedBlockerId] = useState("");
   const [newComment, setNewComment] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Escape key keyboard listener
+  // Pure React 19 Render-time state synchronization (zero cascading renders)
+  if (task !== prevTask) {
+    setPrevTask(task);
+    setTitle(task.title);
+    setDescription(task.description);
+    setStatus(task.status);
+    setPriority(task.priority);
+    setTag(task.tag);
+    setAssigneeName(task.assigneeName);
+    setDueDate(task.dueDate || "");
+    setErrorMessage(null);
+  }
+
+  // Global Escape key handler
   useEffect(() => {
-    if (!isOpen) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && isOpen) {
         onClose();
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setErrorMessage(null);
 
     const trimmedTitle = title.trim();
     const trimmedDesc = description.trim();
 
-    if (!trimmedTitle || !trimmedDesc || !assigneeName) {
-      setError("All fields are required.");
+    if (!trimmedTitle) {
+      setErrorMessage("Task title cannot be empty.");
+      return;
+    }
+
+    if (!trimmedDesc) {
+      setErrorMessage("Task description cannot be empty.");
       return;
     }
 
@@ -77,35 +110,34 @@ export function EditTaskModal({
       description: trimmedDesc,
       status,
       priority,
-      assigneeName,
       tag,
-      dueDate: dueDate.trim() || undefined,
+      assigneeName,
+      dueDate: dueDate || undefined,
     });
   };
 
-  const handlePostComment = (e: FormEvent<HTMLFormElement>) => {
+  const handlePostComment = (e: FormEvent) => {
     e.preventDefault();
-    const trimmed = newComment.trim();
-    if (!trimmed) return;
-
-    onAddComment(trimmed);
+    if (!newComment.trim()) return;
+    onAddComment(newComment.trim());
     setNewComment("");
   };
 
-  const insertSnippet = (snippet: string) => {
-    setDescription((prev) => {
-      const separator = prev.endsWith("\n") || !prev ? "" : "\n";
-      return `${prev}${separator}${snippet}`;
-    });
-    setDescTab("write");
-  };
+  // Filter tasks that can be added as blockers
+  const availableBlockerTasks = allProjectTasks.filter(
+    (t) =>
+      t.id !== task.id &&
+      !(task.blockedBy || []).some((b) => b.dependsOnTaskId === t.id),
+  );
+
+  const allUserNames = allUsers.map((u) => u.name);
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-labelledby="edit-task-heading"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
+      aria-labelledby="edit-task-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
     >
       {/* Backdrop */}
       <div
@@ -113,33 +145,45 @@ export function EditTaskModal({
         className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
       />
 
-      {/* Modal Card */}
-      <div className="relative my-8 w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl transition-all sm:p-8">
+      {/* Modal Dialog */}
+      <div className="relative z-10 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl space-y-6">
+        {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <h2 id="edit-task-heading" className="text-lg font-bold text-white">
-            Task Details & Discussion
-          </h2>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-xs font-bold text-slate-500">
+              {task.id}
+            </span>
+            <span
+              className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
+                statusStyles[status]
+              }`}
+            >
+              {status}
+            </span>
+          </div>
+
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white transition"
           >
             ✕
           </button>
         </div>
 
-        {error && (
+        {errorMessage && (
           <div
             role="alert"
-            className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
+            className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300"
           >
-            {error}
+            {errorMessage}
           </div>
         )}
 
-        {/* Task Edit Form */}
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        {/* Task Form */}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Title Input */}
           <div>
             <label
               htmlFor="edit-task-title"
@@ -151,99 +195,51 @@ export function EditTaskModal({
               id="edit-task-title"
               type="text"
               required
-              disabled={isPending}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
+              className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
             />
           </div>
 
-          {/* Markdown Description with Write vs Preview Tabs */}
-          <div>
+          {/* Description Markdown Editor / Preview */}
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <label
-                  htmlFor="edit-task-desc"
-                  className="block text-xs font-medium text-slate-300"
-                >
-                  Description (Markdown)
-                </label>
-                <div className="inline-flex rounded-lg border border-slate-800 bg-slate-950 p-0.5 text-[10px]">
-                  <button
-                    type="button"
-                    onClick={() => setDescTab("write")}
-                    className={[
-                      "rounded px-2 py-0.5 font-semibold transition",
-                      descTab === "write"
-                        ? "bg-slate-800 text-cyan-300"
-                        : "text-slate-400 hover:text-slate-200",
-                    ].join(" ")}
-                  >
-                    Write
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDescTab("preview")}
-                    className={[
-                      "rounded px-2 py-0.5 font-semibold transition",
-                      descTab === "preview"
-                        ? "bg-slate-800 text-cyan-300"
-                        : "text-slate-400 hover:text-slate-200",
-                    ].join(" ")}
-                  >
-                    Preview
-                  </button>
-                </div>
-              </div>
-
-              {/* Quick Snippet Helpers */}
-              <div className="flex items-center gap-1.5 text-[10px]">
-                <button
-                  type="button"
-                  onClick={() => insertSnippet("- [ ] Acceptance criterion")}
-                  className="rounded border border-slate-800 bg-slate-950/80 px-2 py-0.5 text-slate-300 hover:border-slate-700 hover:text-cyan-300 transition"
-                  title="Insert Checklist item"
-                >
-                  + Checklist
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertSnippet("**bold text**")}
-                  className="rounded border border-slate-800 bg-slate-950/80 px-2 py-0.5 text-slate-300 hover:border-slate-700 hover:text-cyan-300 transition"
-                  title="Insert Bold text"
-                >
-                  + Bold
-                </button>
-                <button
-                  type="button"
-                  onClick={() => insertSnippet("`code snippet`")}
-                  className="rounded border border-slate-800 bg-slate-950/80 px-2 py-0.5 text-slate-300 hover:border-slate-700 hover:text-cyan-300 transition"
-                  title="Insert Inline Code"
-                >
-                  + Code
-                </button>
-              </div>
+              <label
+                htmlFor="edit-task-description"
+                className="block text-xs font-medium text-slate-300"
+              >
+                Description (Markdown Supported)
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsPreviewMode((prev) => !prev)}
+                className="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 transition"
+              >
+                {isPreviewMode ? "✏️ Edit Markdown" : "👁️ Preview Markdown"}
+              </button>
             </div>
 
-            {descTab === "write" ? (
+            {isPreviewMode ? (
+              <div className="min-h-[120px] rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-xs">
+                <MarkdownView
+                  content={description || "_No description provided._"}
+                />
+              </div>
+            ) : (
               <textarea
-                id="edit-task-desc"
+                id="edit-task-description"
                 rows={4}
                 required
-                disabled={isPending}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Support **bold**, `code`, and checklists:&#10;- [ ] Checklist item 1&#10;- [ ] Checklist item 2"
-                className="mt-1.5 w-full font-mono rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
+                placeholder="Acceptance criteria, code references, or checklist items..."
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 leading-relaxed"
               />
-            ) : (
-              <div className="mt-1.5 min-h-[100px] rounded-lg border border-slate-800 bg-slate-950/80 p-3">
-                <MarkdownView content={description} />
-              </div>
             )}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* Metadata Grid (Status, Priority, Assignee, Tag, Due Date) */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label
                 htmlFor="edit-task-status"
@@ -254,9 +250,8 @@ export function EditTaskModal({
               <select
                 id="edit-task-status"
                 value={status}
-                disabled={isPending}
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               >
                 <option value="Todo">Todo</option>
                 <option value="In Progress">In Progress</option>
@@ -275,9 +270,8 @@ export function EditTaskModal({
               <select
                 id="edit-task-priority"
                 value={priority}
-                disabled={isPending}
                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               >
                 <option value="Low">Low</option>
                 <option value="Medium">Medium</option>
@@ -285,9 +279,28 @@ export function EditTaskModal({
                 <option value="Urgent">Urgent</option>
               </select>
             </div>
-          </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <label
+                htmlFor="edit-task-assignee"
+                className="block text-xs font-medium text-slate-300"
+              >
+                Assignee
+              </label>
+              <select
+                id="edit-task-assignee"
+                value={assigneeName}
+                onChange={(e) => setAssigneeName(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+              >
+                {allUsers.map((user) => (
+                  <option key={user.id} value={user.name}>
+                    {user.name} ({user.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label
                 htmlFor="edit-task-tag"
@@ -298,26 +311,14 @@ export function EditTaskModal({
               <select
                 id="edit-task-tag"
                 value={tag}
-                disabled={isPending}
                 onChange={(e) => setTag(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 font-mono lowercase"
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 font-mono lowercase"
               >
-                {workspaceTags.length > 0 ? (
-                  workspaceTags.map((t) => (
-                    <option key={t.id} value={t.name}>
-                      #{t.name}
-                    </option>
-                  ))
-                ) : (
-                  <>
-                    <option value="feature">#feature</option>
-                    <option value="bug">#bug</option>
-                    <option value="frontend">#frontend</option>
-                    <option value="backend">#backend</option>
-                    <option value="security">#security</option>
-                    <option value="infra">#infra</option>
-                  </>
-                )}
+                {workspaceTags.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    #{t.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -331,142 +332,166 @@ export function EditTaskModal({
               <input
                 id="edit-task-due"
                 type="date"
-                disabled={isPending}
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs font-mono text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               />
-            </div>
-
-            <div>
-              <label
-                htmlFor="edit-task-assignee"
-                className="block text-xs font-medium text-slate-300"
-              >
-                Assignee
-              </label>
-              <select
-                id="edit-task-assignee"
-                value={assigneeName}
-                disabled={isPending}
-                onChange={(e) => setAssigneeName(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
-              >
-                {allUsers.map((u) => (
-                  <option key={u.id} value={u.name}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
+          {/* Task Dependency Blockers Section */}
+          <div className="border-t border-slate-800 pt-5 space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Task Dependencies & Blockers
+            </h3>
+
+            {(task.blockedBy || []).length > 0 ? (
+              <ul className="space-y-2">
+                {(task.blockedBy || []).map((dep) => (
+                  <li
+                    key={dep.id}
+                    className="flex items-center justify-between rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>⛔</span>
+                      <span className="text-slate-200">
+                        Blocked by:{" "}
+                        <strong className="text-white">
+                          {dep.dependsOnTaskTitle}
+                        </strong>
+                      </span>
+                      <span className="rounded bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-mono text-slate-400">
+                        {dep.dependsOnTaskStatus}
+                      </span>
+                    </div>
+
+                    {onRemoveDependency && (
+                      <button
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => onRemoveDependency(dep.id)}
+                        className="rounded p-1 text-slate-400 hover:bg-rose-500/20 hover:text-rose-300 transition"
+                        title="Remove blocker link"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-slate-500 italic">
+                No active prerequisite blockers linked.
+              </p>
+            )}
+
+            {availableBlockerTasks.length > 0 && onAddDependency && (
+              <div className="flex items-center gap-2 pt-1">
+                <select
+                  value={selectedBlockerId}
+                  onChange={(e) => setSelectedBlockerId(e.target.value)}
+                  className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                >
+                  <option value="">
+                    Select a prerequisite task to link as blocker...
+                  </option>
+                  {availableBlockerTasks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      [{t.status}] {t.title}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  disabled={!selectedBlockerId || isPending}
+                  onClick={() => {
+                    if (selectedBlockerId) {
+                      onAddDependency(task.id, selectedBlockerId);
+                      setSelectedBlockerId("");
+                    }
+                  }}
+                  className="rounded-lg bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10 hover:border-cyan-500/30 disabled:opacity-40 transition"
+                >
+                  + Link Blocker
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Form Actions */}
+          <div className="flex justify-end gap-3 border-t border-slate-800 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-slate-700 px-3.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+              className="rounded-xl border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800 transition"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isPending}
-              className="rounded-lg bg-cyan-400 px-3.5 py-1.5 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-50"
+              disabled={isPending || !title.trim()}
+              className="rounded-xl bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-40 transition"
             >
               {isPending ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </form>
 
-        {/* Discussion Stream Section */}
-        <section
-          aria-labelledby="discussion-heading"
-          className="mt-6 border-t border-slate-800 pt-6"
-        >
-          <div className="flex items-center gap-2">
-            <h3
-              id="discussion-heading"
-              className="text-xs font-bold uppercase tracking-wider text-slate-300"
-            >
-              Team Discussion & Notes
-            </h3>
-            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-cyan-300">
-              {comments.length}
-            </span>
-          </div>
+        {/* Discussion Notes Section with @Mention Support (Phase 65) */}
+        <div className="border-t border-slate-800 pt-6 space-y-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            Discussion & Activity Notes ({comments.length})
+          </h3>
 
-          {/* Comments List */}
-          <div className="mt-4 space-y-3">
-            {comments.length === 0 ? (
-              <p className="text-xs text-slate-500 italic">
-                No discussion notes yet. Leave an update for your team below.
-              </p>
-            ) : (
-              <ul className="space-y-3">
-                {comments.map((comm) => {
-                  const initials = comm.userName
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .toUpperCase();
+          {comments.length === 0 ? (
+            <p className="text-xs text-slate-500 italic">
+              No notes or updates posted yet.
+            </p>
+          ) : (
+            <ul className="space-y-2.5">
+              {comments.map((comm) => (
+                <li
+                  key={comm.id}
+                  className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3 text-xs"
+                >
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span className="font-semibold text-slate-200">
+                      {comm.userName}
+                    </span>
+                    <span>{comm.createdAt}</span>
+                  </div>
+                  <MentionText
+                    content={comm.content}
+                    allUserNames={allUserNames}
+                    className="mt-1.5 text-slate-300 leading-relaxed whitespace-pre-wrap"
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
 
-                  return (
-                    <li
-                      key={comm.id}
-                      className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3.5"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span
-                            aria-hidden="true"
-                            className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-[10px] font-bold text-slate-200"
-                          >
-                            {initials}
-                          </span>
-                          <span className="text-xs font-semibold text-white">
-                            {comm.userName}
-                          </span>
-                        </div>
-                        <time className="text-[10px] text-slate-500">
-                          {comm.createdAt}
-                        </time>
-                      </div>
-
-                      <p className="mt-2 text-xs leading-relaxed text-slate-300 whitespace-pre-wrap">
-                        {comm.content}
-                      </p>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          {/* Add Comment Input */}
-          <form onSubmit={handlePostComment} className="mt-4">
-            <label htmlFor="new-comment" className="sr-only">
-              Add a note or comment
-            </label>
-            <textarea
-              id="new-comment"
-              rows={2}
-              placeholder={`Leave a comment as ${currentUser.name}...`}
+          {/* Add Comment with Mention Autocomplete */}
+          <form onSubmit={handlePostComment} className="mt-3 space-y-2">
+            <MentionAutocompleteInput
               value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+              onChange={setNewComment}
+              allUsers={allUsers}
+              placeholder={`Post note as ${currentUser.name}... Type @ to mention a teammate`}
+              rows={2}
+              disabled={isPending}
             />
-            <div className="mt-2 flex justify-end">
+            <div className="flex justify-end">
               <button
                 type="submit"
                 disabled={!newComment.trim() || isPending}
-                className="rounded-lg bg-cyan-400 px-3 py-1.5 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-40 transition"
+                className="rounded-lg bg-cyan-400 px-3.5 py-1.5 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-40 transition"
               >
-                Post Comment
+                Post Note
               </button>
             </div>
           </form>
-        </section>
+        </div>
       </div>
     </div>
   );

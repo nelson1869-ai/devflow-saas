@@ -6,11 +6,14 @@ import type { User } from "../lib/auth";
 import type { ActivityItem } from "../lib/activity-types";
 import type { TaskComment } from "../lib/comments";
 import { getDueDateMeta } from "../lib/dates";
+import { MentionAutocompleteInput } from "../components/MentionAutocompleteInput";
+import { MentionText } from "../components/MentionText";
 
 type TaskAuditDrawerProps = Readonly<{
   task: Task;
   activities: readonly ActivityItem[];
   comments: readonly TaskComment[];
+  allUsers?: readonly User[];
   currentUser: User;
   isOpen: boolean;
   onClose: () => void;
@@ -35,6 +38,7 @@ export function TaskAuditDrawer({
   task,
   activities,
   comments,
+  allUsers = [],
   currentUser,
   isOpen,
   onClose,
@@ -42,48 +46,48 @@ export function TaskAuditDrawer({
   isPending = false,
 }: TaskAuditDrawerProps) {
   const [newComment, setNewComment] = useState("");
-  const dueMeta = getDueDateMeta(task.dueDate, task.status === "Done");
 
-  // Escape key listener
+  // Global Escape key listener
   useEffect(() => {
-    if (!isOpen) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && isOpen) {
         onClose();
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Combine activities and comments into unified chronological stream
+  const handlePostComment = (e: FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+    onAddComment(newComment.trim());
+    setNewComment("");
+  };
+
+  const dueMeta = getDueDateMeta(task.dueDate);
+
+  // Merge activity events and discussion comments chronologically
   const timelineItems = useMemo<readonly MergedTimelineItem[]>(() => {
     const items: MergedTimelineItem[] = [];
 
-    // Filter activities for this task
-    const taskActivities = activities.filter(
-      (a) => a.taskId === task.id || a.entityTitle === task.title,
-    );
-
-    for (const act of taskActivities) {
+    for (const act of activities) {
       let icon = "⚡";
-      let style = "bg-slate-800 text-slate-300 border-slate-700";
+      let style = "bg-cyan-500/10 text-cyan-400 border-cyan-500/30";
 
       if (act.action === "created_task") {
-        icon = "🚀";
-        style = "bg-cyan-500/10 text-cyan-400 border-cyan-500/30";
+        icon = "✨";
+        style = "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
       } else if (act.action === "updated_task_status") {
         icon = "🔄";
         style = "bg-purple-500/10 text-purple-400 border-purple-500/30";
-      } else if (act.action === "updated_task") {
-        icon = "✏️";
-        style = "bg-amber-500/10 text-amber-400 border-amber-500/30";
+      } else if (act.action === "deleted_task") {
+        icon = "🗑️";
+        style = "bg-rose-500/10 text-rose-400 border-rose-500/30";
       }
 
       items.push({
-        id: act.id,
+        id: `act-${act.id}`,
         type: "activity",
         userName: act.userName,
         title: act.entityTitle,
@@ -93,11 +97,9 @@ export function TaskAuditDrawer({
       });
     }
 
-    // Include comments for this task
-    const taskComments = comments.filter((c) => c.taskId === task.id);
-    for (const comm of taskComments) {
+    for (const comm of comments) {
       items.push({
-        id: comm.id,
+        id: `comm-${comm.id}`,
         type: "comment",
         userName: comm.userName,
         title: "Discussion Note",
@@ -105,78 +107,62 @@ export function TaskAuditDrawer({
         createdAt: comm.createdAt,
         badge: {
           icon: "💬",
-          style: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+          style: "bg-cyan-500/10 text-cyan-400 border-cyan-500/30",
         },
       });
     }
 
     return items;
-  }, [activities, comments, task]);
+  }, [activities, comments]);
 
   if (!isOpen) return null;
 
-  const handlePostComment = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const trimmed = newComment.trim();
-    if (!trimmed) return;
-
-    onAddComment(trimmed);
-    setNewComment("");
-  };
+  const allUserNames = allUsers.map((u) => u.name);
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-labelledby="audit-drawer-heading"
+      aria-labelledby="audit-drawer-title"
       className="fixed inset-0 z-50 flex justify-end"
     >
       {/* Backdrop */}
       <div
         onClick={onClose}
-        className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
       />
 
-      {/* Slide-out Drawer Panel */}
-      <aside className="relative z-10 flex h-full w-full max-w-lg flex-col border-l border-cyan-500/30 bg-slate-900 shadow-2xl transition-all">
+      {/* Drawer Container */}
+      <aside className="relative z-10 flex h-full w-full max-w-md flex-col border-l border-slate-800 bg-slate-900 text-slate-100 shadow-2xl">
         {/* Drawer Header */}
         <div className="flex items-start justify-between border-b border-slate-800 p-6">
-          <div className="space-y-2">
+          <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="rounded bg-slate-800 px-2 py-0.5 font-mono text-[10px] text-cyan-400">
+              <span className="font-mono text-xs font-bold text-slate-400">
+                {task.id}
+              </span>
+              <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono lowercase text-cyan-300">
                 #{task.tag}
               </span>
-              <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-300">
-                {task.priority} Priority
-              </span>
-              <span className="rounded bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-300 border border-cyan-500/30">
-                {task.status}
-              </span>
             </div>
-
             <h2
-              id="audit-drawer-heading"
-              className="text-base font-bold text-white leading-snug"
+              id="audit-drawer-title"
+              className="text-base font-bold text-white"
             >
               {task.title}
             </h2>
-
-            <div className="flex items-center gap-3 text-xs text-slate-400">
-              <span>
-                Assignee:{" "}
-                <strong className="text-slate-200">{task.assigneeName}</strong>
-              </span>
-              {task.dueDate && (
-                <span className={dueMeta.badgeStyle}>📅 {dueMeta.label}</span>
-              )}
+            <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-slate-400">
+              <span>👤 {task.assigneeName}</span>
+              <span>•</span>
+              <span className={dueMeta.badgeStyle}>{dueMeta.label}</span>
             </div>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close drawer"
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition focus-visible:outline-2 focus-visible:outline-cyan-400"
+            aria-label="Close audit drawer"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition"
           >
             ✕
           </button>
@@ -227,9 +213,11 @@ export function TaskAuditDrawer({
                     </div>
 
                     {item.details && (
-                      <p className="text-xs leading-relaxed text-slate-300 whitespace-pre-wrap">
-                        {item.details}
-                      </p>
+                      <MentionText
+                        content={item.details}
+                        allUserNames={allUserNames}
+                        className="text-xs leading-relaxed text-slate-300 whitespace-pre-wrap"
+                      />
                     )}
                   </div>
                 </div>
@@ -238,19 +226,16 @@ export function TaskAuditDrawer({
           )}
         </div>
 
-        {/* Quick Discussion Comment Input */}
+        {/* Quick Discussion Comment Input with @Mention Autocomplete */}
         <div className="border-t border-slate-800 bg-slate-950/80 p-4">
           <form onSubmit={handlePostComment} className="space-y-2">
-            <label htmlFor="drawer-comment" className="sr-only">
-              Add note to audit trail
-            </label>
-            <textarea
-              id="drawer-comment"
-              rows={2}
+            <MentionAutocompleteInput
               value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder={`Add audit note or comment as ${currentUser.name}...`}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+              onChange={setNewComment}
+              allUsers={allUsers}
+              placeholder={`Add audit note as ${currentUser.name}... Type @ to mention`}
+              rows={2}
+              disabled={isPending}
             />
             <div className="flex justify-end">
               <button

@@ -950,13 +950,17 @@ export async function createCommentAction(
         taskId,
       );
 
+      // 1. Notify Assignee if different from commenter
       const userStmt = db.prepare(
         "SELECT id FROM devflow_users WHERE name = ?",
       );
       const assignee = userStmt.get(task.assignee_name) as
         | { id: string }
         | undefined;
+
+      const notifiedUserIds = new Set<string>();
       if (assignee && assignee.id !== currentUser.id) {
+        notifiedUserIds.add(assignee.id);
         createNotification(
           assignee.id,
           project.org_id,
@@ -966,9 +970,58 @@ export async function createCommentAction(
           `/devflow-saas/projects/${projectId}`,
         );
       }
+
+      // 2. Parse @Mentions with high-precision word boundaries
+      const allDbUsers = db
+        .prepare("SELECT id, name FROM devflow_users")
+        .all() as { id: string; name: string }[];
+
+      for (const u of allDbUsers) {
+        if (u.id === currentUser.id || notifiedUserIds.has(u.id)) continue;
+
+        const fullNameLower = u.name.toLowerCase();
+        const firstNameLower = fullNameLower.split(" ")[0];
+
+        const escapedFull = fullNameLower.replace(
+          /[-[\]{}()*+?.,\\^$|#\s]/g,
+          "\\$&",
+        );
+        const escapedFirst = firstNameLower.replace(
+          /[-[\]{}()*+?.,\\^$|#\s]/g,
+          "\\$&",
+        );
+
+        const fullRegex = new RegExp(`@${escapedFull}(?=[^a-zA-Z0-9_]|$)`, "i");
+        const firstRegex = new RegExp(
+          `@${escapedFirst}(?=[^a-zA-Z0-9_]|$)`,
+          "i",
+        );
+
+        if (fullRegex.test(content) || firstRegex.test(content)) {
+          notifiedUserIds.add(u.id);
+          createNotification(
+            u.id,
+            project.org_id,
+            "Mentioned in Discussion",
+            `${currentUser.name} mentioned you on "${task.title}": "${content.slice(0, 60)}${content.length > 60 ? "..." : ""}"`,
+            "mention",
+            `/devflow-saas/projects/${projectId}`,
+          );
+        }
+      }
+
+      // 3. Dispatch Outbound Webhook
+      dispatchWebhookEvent(project.org_id, "task.status_changed", {
+        taskId,
+        projectId,
+        title: task.title,
+        commentAuthor: currentUser.name,
+        content,
+      });
     }
 
     revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas", "layout");
     revalidatePath("/devflow-saas/calendar");
     revalidatePath("/devflow-saas/activity");
     revalidatePath("/devflow-saas/analytics");

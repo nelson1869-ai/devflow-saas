@@ -1316,6 +1316,7 @@ export function ProjectTasksView({
               a.entityTitle === historyTask.title,
           )}
           comments={comments.filter((c) => c.taskId === historyTask.id)}
+          allUsers={allUsers}
           currentUser={currentUser}
           isOpen={Boolean(historyTask)}
           onClose={() => setHistoryTask(null)}

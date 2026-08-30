@@ -17,6 +17,7 @@ type FilterType = "all" | "unread" | NotificationType;
 const typeIcons: Record<NotificationType, string> = {
   assignment: "📋",
   comment: "💬",
+  mention: "👤",
   status: "🔄",
   system: "⚙️",
 };

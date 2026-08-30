@@ -16,8 +16,10 @@ const shortcutGroups: readonly ShortcutCategory[] = [
   {
     category: "Navigation & Spotlight",
     items: [
-      { keys: ["⌘", "K"], description: "Open Command Palette & Global Search" },
+      { keys: ["⌘", "K"], description: "Open Command Palette & Quick Search" },
+      { keys: ["/"], description: "Jump directly to Global Full-Text Search" },
       { keys: ["?"], description: "Open this Keyboard Shortcuts Cheat Sheet" },
+      { keys: ["G", "S"], description: "Go to Global Search" },
       { keys: ["G", "P"], description: "Go to Projects Dashboard" },
       {
         keys: ["G", "T"],
@@ -85,6 +87,14 @@ export function KeyboardShortcutsModal() {
 
       if (isInput) return;
 
+      // Direct jump to search with '/'
+      if (e.key === "/" && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        router.push("/devflow-saas/search");
+        setIsOpen(false);
+        return;
+      }
+
       // Toggle cheat sheet with '?'
       if (e.key === "?" && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
@@ -105,7 +115,11 @@ export function KeyboardShortcutsModal() {
 
       if (isRecentG) {
         const pressed = e.key.toLowerCase();
-        if (pressed === "p") {
+        if (pressed === "s") {
+          e.preventDefault();
+          router.push("/devflow-saas/search");
+          setIsOpen(false);
+        } else if (pressed === "p") {
           e.preventDefault();
           router.push("/devflow-saas/projects");
           setIsOpen(false);
@@ -141,7 +155,7 @@ export function KeyboardShortcutsModal() {
       role="dialog"
       aria-modal="true"
       aria-labelledby="shortcuts-heading"
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-9999 flex items-center justify-center p-4 overflow-y-auto"
     >
       {/* Full Screen Backdrop */}
       <div

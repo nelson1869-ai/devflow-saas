@@ -96,6 +96,18 @@ export function CommandPalette({
     });
 
     items.push({
+      id: "nav-search",
+      category: "Navigation",
+      title: "Go to Global Search",
+      subtitle: "Full-text search across projects, tasks, and discussions",
+      icon: "🔍",
+      onSelect: () => {
+        router.push("/devflow-saas/search");
+        setIsOpen(false);
+      },
+    });
+
+    items.push({
       id: "nav-team",
       category: "Navigation",
       title: "Go to Team & Access Control",
@@ -215,7 +227,7 @@ export function CommandPalette({
       role="dialog"
       aria-modal="true"
       aria-label="Command Palette"
-      className="fixed inset-0 z-[9999] flex items-start justify-center p-4 pt-20 sm:pt-28"
+      className="fixed inset-0 z-9999 flex items-start justify-center p-4 pt-20 sm:pt-28"
     >
       {/* Backdrop */}
       <div

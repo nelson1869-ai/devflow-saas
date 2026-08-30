@@ -4,7 +4,12 @@ import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Project, ProjectStatus } from "../types";
 import type { User } from "../../lib/auth";
-import { updateProjectAction, deleteProjectAction } from "../../lib/actions";
+import {
+  updateProjectAction,
+  archiveProjectAction,
+  restoreProjectAction,
+  deleteProjectAction,
+} from "../../lib/actions";
 
 type ProjectSettingsViewProps = Readonly<{
   project: Project;
@@ -74,6 +79,31 @@ export function ProjectSettingsView({
     });
   };
 
+  const handleToggleArchive = () => {
+    startTransition(async () => {
+      if (project.isArchived) {
+        const res = await restoreProjectAction(project.id);
+        if (res.success) {
+          setFeedback({
+            type: "success",
+            message: "Project restored back to active status.",
+          });
+          router.refresh();
+        }
+      } else {
+        const confirmed = window.confirm(
+          `Archive "${project.name}"? It will be hidden from active project lists and marked read-only.`,
+        );
+        if (!confirmed) return;
+
+        const res = await archiveProjectAction(project.id);
+        if (res.success) {
+          router.push("/devflow-saas/projects");
+        }
+      }
+    });
+  };
+
   const handleDelete = () => {
     const confirmed = window.confirm(
       `Are you sure you want to permanently delete "${project.name}" and all its tasks? This action cannot be undone.`,
@@ -98,15 +128,14 @@ export function ProjectSettingsView({
           General Project Settings
         </h2>
         <p className="mt-1 text-xs text-slate-400">
-          Update the display name, unique identifier key, and operational
-          status.
+          Update the display name, identifier key, and current delivery state.
         </p>
 
         {feedback && (
           <div
             role="alert"
             className={[
-              "mt-4 rounded-xl border p-3.5 text-xs font-medium",
+              "mt-4 rounded-lg border px-3 py-2 text-xs",
               feedback.type === "success"
                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
                 : "border-rose-500/30 bg-rose-500/10 text-rose-300",
@@ -141,7 +170,7 @@ export function ProjectSettingsView({
                 htmlFor="settings-key"
                 className="block text-xs font-medium text-slate-300"
               >
-                Project Key (2–6 Uppercase Letters)
+                Project Key (2-6 uppercase letters)
               </label>
               <input
                 id="settings-key"
@@ -206,22 +235,49 @@ export function ProjectSettingsView({
         </form>
       </div>
 
-      {/* Danger Zone */}
-      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/5 p-6 sm:p-8">
-        <h3 className="text-base font-bold text-rose-300">Danger Zone</h3>
-        <p className="mt-1 text-xs text-slate-400">
-          Permanently delete this project and cascade-remove all related tasks,
-          comments, and metrics.
-        </p>
+      {/* Danger & Archival Zone */}
+      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/5 p-6 sm:p-8 space-y-6">
+        <div>
+          <h3 className="text-base font-bold text-rose-300">Danger Zone</h3>
+          <p className="mt-1 text-xs text-slate-400">
+            Archive or permanently destroy project records and deliverables.
+          </p>
+        </div>
 
-        <div className="mt-5 flex items-center justify-between border-t border-rose-500/20 pt-4">
+        {/* Archival Action Row */}
+        <div className="flex items-center justify-between border-t border-rose-500/20 pt-4">
           <div>
             <p className="text-xs font-semibold text-white">
-              Delete this Project
+              {project.isArchived
+                ? "Restore Project"
+                : "Archive Project (Soft Delete)"}
+            </p>
+            <p className="text-[11px] text-slate-400">
+              {project.isArchived
+                ? "Move project back from cold storage to active workspace."
+                : "Hides project from active views and locks tasks in read-only mode."}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleToggleArchive}
+            disabled={isPending}
+            className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/20 transition"
+          >
+            {project.isArchived ? "🔄 Restore" : "📦 Archive"}
+          </button>
+        </div>
+
+        {/* Permanent Deletion Row */}
+        <div className="flex items-center justify-between border-t border-rose-500/20 pt-4">
+          <div>
+            <p className="text-xs font-semibold text-white">
+              Delete this Project Forever
             </p>
             <p className="text-[11px] text-slate-400">
               {currentUser.role === "Admin"
-                ? "Once deleted, project data cannot be recovered."
+                ? "Permanently destroys all tasks, comments, and metrics. Cannot be recovered."
                 : "Only workspace Admins can delete projects."}
             </p>
           </div>
@@ -233,7 +289,7 @@ export function ProjectSettingsView({
               disabled={isPending}
               className="rounded-lg border border-rose-500/40 bg-rose-500/20 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/30 hover:text-rose-200 focus-visible:outline-2 focus-visible:outline-rose-400 transition"
             >
-              Delete Project
+              Delete Forever
             </button>
           ) : (
             <span className="rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-400">

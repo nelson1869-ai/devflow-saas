@@ -11,6 +11,20 @@ db.pragma("foreign_keys = ON");
 
 // Self-healing runtime migrations
 try {
+  db.exec(
+    "ALTER TABLE devflow_projects ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0",
+  );
+} catch {
+  // Column already exists
+}
+
+try {
+  db.exec("ALTER TABLE devflow_projects ADD COLUMN archived_at TEXT");
+} catch {
+  // Column already exists
+}
+
+try {
   db.exec("ALTER TABLE devflow_activity ADD COLUMN task_id TEXT");
 } catch {
   // Column already exists

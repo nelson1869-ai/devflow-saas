@@ -11,6 +11,8 @@ type ProjectRow = {
   key: string;
   description: string;
   status: ProjectStatus;
+  is_archived: number;
+  archived_at: string | null;
   created_at: string;
 };
 
@@ -38,7 +40,7 @@ type TagRow = {
 
 export function getAllProjects(): readonly Project[] {
   const stmt = db.prepare(`
-    SELECT id, name, key, description, status
+    SELECT id, org_id, name, key, description, status, is_archived, archived_at
     FROM devflow_projects
     ORDER BY created_at DESC
   `);
@@ -46,16 +48,19 @@ export function getAllProjects(): readonly Project[] {
   const rows = stmt.all() as ProjectRow[];
   return rows.map((row) => ({
     id: row.id,
+    orgId: row.org_id,
     name: row.name,
     key: row.key,
     description: row.description,
     status: row.status,
+    isArchived: Boolean(row.is_archived),
+    archivedAt: row.archived_at ?? undefined,
   }));
 }
 
 export function getProjectsByOrgId(orgId: string): readonly Project[] {
   const stmt = db.prepare(`
-    SELECT id, name, key, description, status
+    SELECT id, org_id, name, key, description, status, is_archived, archived_at
     FROM devflow_projects
     WHERE org_id = ?
     ORDER BY created_at DESC
@@ -64,16 +69,19 @@ export function getProjectsByOrgId(orgId: string): readonly Project[] {
   const rows = stmt.all(orgId) as ProjectRow[];
   return rows.map((row) => ({
     id: row.id,
+    orgId: row.org_id,
     name: row.name,
     key: row.key,
     description: row.description,
     status: row.status,
+    isArchived: Boolean(row.is_archived),
+    archivedAt: row.archived_at ?? undefined,
   }));
 }
 
 export function getProjectById(id: string): Project | null {
   const stmt = db.prepare(`
-    SELECT id, name, key, description, status
+    SELECT id, org_id, name, key, description, status, is_archived, archived_at
     FROM devflow_projects
     WHERE id = ?
   `);
@@ -83,10 +91,13 @@ export function getProjectById(id: string): Project | null {
 
   return {
     id: row.id,
+    orgId: row.org_id,
     name: row.name,
     key: row.key,
     description: row.description,
     status: row.status,
+    isArchived: Boolean(row.is_archived),
+    archivedAt: row.archived_at ?? undefined,
   };
 }
 

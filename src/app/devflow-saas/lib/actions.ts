@@ -334,8 +334,8 @@ export async function createProjectAction(
   try {
     const projectId = `proj-${Date.now()}`;
     const stmt = db.prepare(`
-      INSERT INTO devflow_projects (id, org_id, name, key, description, status)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO devflow_projects (id, org_id, name, key, description, status, is_archived)
+      VALUES (?, ?, ?, ?, ?, ?, 0)
     `);
 
     stmt.run(projectId, orgId, name, key, description, status);
@@ -484,6 +484,93 @@ export async function updateProjectAction(
   }
 }
 
+export async function archiveProjectAction(
+  projectId: string,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  try {
+    const projectStmt = db.prepare(
+      "SELECT name, org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { name: string; org_id: string }
+      | undefined;
+
+    if (!project) {
+      return { success: false, error: "Project not found." };
+    }
+
+    const nowIso = new Date().toISOString();
+    const stmt = db.prepare(`
+      UPDATE devflow_projects
+      SET is_archived = 1, archived_at = ?
+      WHERE id = ?
+    `);
+    stmt.run(nowIso, projectId);
+
+    logActivity(
+      project.org_id,
+      projectId,
+      currentUser.name,
+      "updated_project",
+      project.name,
+      "Project archived and moved to cold storage (read-only).",
+    );
+
+    revalidatePath("/devflow-saas/projects");
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
+    revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to archive project." };
+  }
+}
+
+export async function restoreProjectAction(
+  projectId: string,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  try {
+    const projectStmt = db.prepare(
+      "SELECT name, org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { name: string; org_id: string }
+      | undefined;
+
+    if (!project) {
+      return { success: false, error: "Project not found." };
+    }
+
+    const stmt = db.prepare(`
+      UPDATE devflow_projects
+      SET is_archived = 0, archived_at = NULL
+      WHERE id = ?
+    `);
+    stmt.run(projectId);
+
+    logActivity(
+      project.org_id,
+      projectId,
+      currentUser.name,
+      "updated_project",
+      project.name,
+      "Project restored from archive back to active workspace.",
+    );
+
+    revalidatePath("/devflow-saas/projects");
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/calendar");
+    revalidatePath("/devflow-saas/activity");
+    revalidatePath("/devflow-saas/analytics");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to restore project." };
+  }
+}
+
 export async function deleteProjectAction(
   projectId: string,
 ): Promise<ActionResponse> {
@@ -506,7 +593,7 @@ export async function deleteProjectAction(
         currentUser.name,
         "deleted_project",
         project.name,
-        "Deleted project and all associated tasks.",
+        "Permanently deleted project and all associated tasks.",
       );
     }
 

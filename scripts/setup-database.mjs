@@ -52,6 +52,8 @@ database.exec(`
     key TEXT NOT NULL UNIQUE,
     description TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'Active',
+    is_archived INTEGER NOT NULL DEFAULT 0,
+    archived_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE
   );
@@ -120,45 +122,20 @@ database.exec(`
   );
 `);
 
-// Migration: ensure task_id column exists on devflow_activity table
+// Migrations
+try {
+  database.exec(
+    "ALTER TABLE devflow_projects ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0",
+  );
+} catch {}
+
+try {
+  database.exec("ALTER TABLE devflow_projects ADD COLUMN archived_at TEXT");
+} catch {}
+
 try {
   database.exec("ALTER TABLE devflow_activity ADD COLUMN task_id TEXT");
-} catch {
-  // Column already exists
-}
-
-// Ensure default organization exists
-database.exec(`
-  INSERT OR IGNORE INTO devflow_organizations (id, name, slug)
-  VALUES ('org-1', 'Acme Engineering', 'acme-eng');
-
-  INSERT OR IGNORE INTO devflow_organizations (id, name, slug)
-  VALUES ('org-2', 'HyperScale Labs', 'hyperscale-labs');
-`);
-
-// Ensure default users exist
-database.exec(`
-  INSERT OR IGNORE INTO devflow_users (id, name, email, role, avatar_url)
-  VALUES ('usr-1', 'Alex Rivera', 'alex@acme.dev', 'Admin', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=128&auto=format&fit=crop&q=80');
-
-  INSERT OR IGNORE INTO devflow_users (id, name, email, role, avatar_url)
-  VALUES ('usr-2', 'Sarah Connor', 'sarah@acme.dev', 'Member', 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=128&auto=format&fit=crop&q=80');
-
-  INSERT OR IGNORE INTO devflow_users (id, name, email, role, avatar_url)
-  VALUES ('usr-3', 'Devin Zhao', 'devin@acme.dev', 'Member', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=128&auto=format&fit=crop&q=80');
-`);
-
-// Ensure memberships exist
-database.exec(`
-  INSERT OR IGNORE INTO devflow_memberships (id, user_id, org_id, role)
-  VALUES ('mem-1', 'usr-1', 'org-1', 'Admin');
-
-  INSERT OR IGNORE INTO devflow_memberships (id, user_id, org_id, role)
-  VALUES ('mem-2', 'usr-2', 'org-1', 'Member');
-
-  INSERT OR IGNORE INTO devflow_memberships (id, user_id, org_id, role)
-  VALUES ('mem-3', 'usr-3', 'org-1', 'Member');
-`);
+} catch {}
 
 console.log("Database schema setup complete.");
 database.close();

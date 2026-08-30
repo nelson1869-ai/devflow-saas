@@ -5,7 +5,12 @@ import type { Project, ProjectStatus, FilterOption } from "./types";
 import type { User, Organization } from "../lib/auth";
 import { ProjectCard } from "./ProjectCard";
 import { ProjectMetrics } from "./ProjectMetrics";
-import { createProjectAction, deleteProjectAction } from "../lib/actions";
+import {
+  createProjectAction,
+  archiveProjectAction,
+  restoreProjectAction,
+  deleteProjectAction,
+} from "../lib/actions";
 import { projectTemplates, type ProjectTemplate } from "../lib/templates";
 
 type ProjectsViewProps = Readonly<{
@@ -19,6 +24,7 @@ const filterOptions: readonly FilterOption[] = [
   "Active",
   "Planning",
   "Completed",
+  "Archived",
 ];
 
 export function ProjectsView({
@@ -45,7 +51,7 @@ export function ProjectsView({
   const [status, setStatus] = useState<ProjectStatus>("Active");
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Sync state when server revalidates data (or workspace switches)
+  // Sync state when server revalidates
   if (initialProjects !== projects && !isPending) {
     setProjects(initialProjects);
   }
@@ -96,6 +102,7 @@ export function ProjectsView({
       key: trimmedKey,
       description: trimmedDescription,
       status,
+      isArchived: false,
     };
     setProjects((prev) => [optimisticProject, ...prev]);
 
@@ -117,6 +124,34 @@ export function ProjectsView({
     });
   };
 
+  const handleArchiveProject = (projectId: string) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === projectId ? { ...p, isArchived: true } : p)),
+    );
+
+    startTransition(async () => {
+      const res = await archiveProjectAction(projectId);
+      if (!res.success) {
+        alert(res.error || "Failed to archive project.");
+        setProjects(initialProjects);
+      }
+    });
+  };
+
+  const handleRestoreProject = (projectId: string) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === projectId ? { ...p, isArchived: false } : p)),
+    );
+
+    startTransition(async () => {
+      const res = await restoreProjectAction(projectId);
+      if (!res.success) {
+        alert(res.error || "Failed to restore project.");
+        setProjects(initialProjects);
+      }
+    });
+  };
+
   const handleDeleteProject = (projectId: string) => {
     if (currentUser.role !== "Admin") {
       alert("Only Workspace Admins can delete projects.");
@@ -124,11 +159,10 @@ export function ProjectsView({
     }
 
     const confirmed = window.confirm(
-      "Are you sure you want to delete this project? All associated tasks in SQLite will also be deleted.",
+      "Are you sure you want to permanently delete this project? All associated tasks and audit history in SQLite will be destroyed.",
     );
     if (!confirmed) return;
 
-    // Optimistic UI removal
     setProjects((prev) => prev.filter((p) => p.id !== projectId));
 
     startTransition(async () => {
@@ -141,8 +175,15 @@ export function ProjectsView({
   };
 
   const filteredProjects = projects.filter((project) => {
-    const matchesFilter =
-      selectedFilter === "All" || project.status === selectedFilter;
+    if (selectedFilter === "Archived") {
+      if (!project.isArchived) return false;
+    } else {
+      if (project.isArchived) return false;
+      if (selectedFilter !== "All" && project.status !== selectedFilter) {
+        return false;
+      }
+    }
+
     const query = searchQuery.trim().toLowerCase();
     const matchesSearch =
       query === "" ||
@@ -150,12 +191,14 @@ export function ProjectsView({
       project.key.toLowerCase().includes(query) ||
       project.description.toLowerCase().includes(query);
 
-    return matchesFilter && matchesSearch;
+    return matchesSearch;
   });
 
   const activeTemplate = projectTemplates.find(
     (t) => t.id === selectedTemplateId,
   );
+
+  const archivedCount = projects.filter((p) => p.isArchived).length;
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
@@ -394,8 +437,8 @@ export function ProjectsView({
           </section>
         )}
 
-        {/* KPI Performance Metrics */}
-        <ProjectMetrics projects={projects} />
+        {/* KPI Performance Metrics (Only for active projects) */}
+        <ProjectMetrics projects={projects.filter((p) => !p.isArchived)} />
 
         {/* Search & Filter Toolbar */}
         <section
@@ -413,6 +456,15 @@ export function ProjectsView({
           >
             {filterOptions.map((option) => {
               const isSelected = selectedFilter === option;
+              const badgeCount =
+                option === "Archived"
+                  ? archivedCount
+                  : option === "All"
+                    ? projects.filter((p) => !p.isArchived).length
+                    : projects.filter(
+                        (p) => !p.isArchived && p.status === option,
+                      ).length;
+
               return (
                 <button
                   key={option}
@@ -421,14 +473,26 @@ export function ProjectsView({
                   aria-selected={isSelected}
                   onClick={() => setSelectedFilter(option)}
                   className={[
-                    "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+                    "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
                     "focus-visible:outline-2 focus-visible:outline-cyan-400",
                     isSelected
-                      ? "bg-cyan-400 text-slate-950 shadow-sm"
+                      ? option === "Archived"
+                        ? "bg-amber-400 text-slate-950 shadow-sm"
+                        : "bg-cyan-400 text-slate-950 shadow-sm"
                       : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
                   ].join(" ")}
                 >
-                  {option}
+                  <span>{option === "Archived" ? "📦 Archived" : option}</span>
+                  <span
+                    className={[
+                      "rounded-full px-1.5 py-0.2 text-[10px] font-bold font-mono",
+                      isSelected
+                        ? "bg-slate-950/20 text-slate-950"
+                        : "bg-slate-800 text-slate-400",
+                    ].join(" ")}
+                  >
+                    {badgeCount}
+                  </span>
                 </button>
               );
             })}
@@ -453,8 +517,13 @@ export function ProjectsView({
 
           {filteredProjects.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-800 p-12 text-center">
-              <p className="text-sm text-slate-400">
-                No projects found matching your criteria.
+              <span className="text-2xl">
+                {selectedFilter === "Archived" ? "📦" : "📁"}
+              </span>
+              <p className="mt-2 text-sm text-slate-400">
+                {selectedFilter === "Archived"
+                  ? "No archived projects in cold storage."
+                  : "No projects found matching your criteria."}
               </p>
             </div>
           ) : (
@@ -463,6 +532,8 @@ export function ProjectsView({
                 <ProjectCard
                   key={project.id}
                   project={project}
+                  onArchive={handleArchiveProject}
+                  onRestore={handleRestoreProject}
                   onDelete={
                     currentUser.role === "Admin"
                       ? handleDeleteProject

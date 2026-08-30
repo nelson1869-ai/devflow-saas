@@ -3,6 +3,8 @@ import type { Project, ProjectStatus } from "./types";
 
 type ProjectCardProps = Readonly<{
   project: Project;
+  onArchive?: (projectId: string) => void;
+  onRestore?: (projectId: string) => void;
   onDelete?: (projectId: string) => void;
 }>;
 
@@ -12,30 +14,69 @@ const statusStyles: Readonly<Record<ProjectStatus, string>> = {
   Completed: "border-slate-500/30 bg-slate-500/10 text-slate-400",
 };
 
-export function ProjectCard({ project, onDelete }: ProjectCardProps) {
+export function ProjectCard({
+  project,
+  onArchive,
+  onRestore,
+  onDelete,
+}: ProjectCardProps) {
   return (
     <li className="group relative flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900/70 p-6 transition hover:border-slate-700 shadow-sm">
       <div>
         <div className="flex items-center justify-between gap-4">
-          <span className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
+          <span className="text-xs font-semibold uppercase tracking-wider text-cyan-400 font-mono">
             {project.key}
           </span>
           <div className="flex items-center gap-2">
-            <span
-              className={[
-                "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
-                statusStyles[project.status],
-              ].join(" ")}
-            >
-              {project.status}
-            </span>
+            {project.isArchived ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-300">
+                <span>📦</span>
+                <span>Archived</span>
+              </span>
+            ) : (
+              <span
+                className={[
+                  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
+                  statusStyles[project.status],
+                ].join(" ")}
+              >
+                {project.status}
+              </span>
+            )}
 
-            {/* Delete Project Button */}
+            {/* Restore Project Button (When Archived) */}
+            {project.isArchived && onRestore && (
+              <button
+                type="button"
+                onClick={() => onRestore(project.id)}
+                aria-label={`Restore project ${project.name}`}
+                title="Restore Project back to active workspace"
+                className="opacity-0 group-hover:opacity-100 transition rounded p-1 text-slate-400 hover:bg-emerald-500/10 hover:text-emerald-300 focus:opacity-100 focus-visible:outline-2 focus-visible:outline-emerald-400"
+              >
+                🔄
+              </button>
+            )}
+
+            {/* Archive Project Button (When Active) */}
+            {!project.isArchived && onArchive && (
+              <button
+                type="button"
+                onClick={() => onArchive(project.id)}
+                aria-label={`Archive project ${project.name}`}
+                title="Archive Project (Soft Delete)"
+                className="opacity-0 group-hover:opacity-100 transition rounded p-1 text-slate-400 hover:bg-amber-500/10 hover:text-amber-300 focus:opacity-100 focus-visible:outline-2 focus-visible:outline-amber-400"
+              >
+                📦
+              </button>
+            )}
+
+            {/* Permanent Delete Button */}
             {onDelete && (
               <button
                 type="button"
                 onClick={() => onDelete(project.id)}
-                aria-label={`Delete project ${project.name}`}
+                aria-label={`Permanently delete project ${project.name}`}
+                title="Permanently Delete Project"
                 className="opacity-0 group-hover:opacity-100 transition rounded p-1 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400 focus:opacity-100 focus-visible:outline-2 focus-visible:outline-rose-400"
               >
                 <svg
@@ -58,24 +99,25 @@ export function ProjectCard({ project, onDelete }: ProjectCardProps) {
         <h3 className="mt-4 text-xl font-semibold text-white">
           <Link
             href={`/devflow-saas/projects/${project.id}`}
-            className="transition hover:text-cyan-400 focus-visible:outline-2 focus-visible:outline-cyan-400"
+            className="hover:text-cyan-300 focus-visible:outline-2 focus-visible:outline-cyan-400"
           >
             {project.name}
           </Link>
         </h3>
 
-        <p className="mt-2 text-sm leading-6 text-slate-300">
+        <p className="mt-2 text-sm leading-relaxed text-slate-400">
           {project.description}
         </p>
       </div>
 
-      <div className="mt-6 border-t border-slate-800/80 pt-4 flex items-center justify-between text-xs text-slate-400">
-        <span>Workspace Project</span>
+      <div className="mt-6 flex items-center justify-between border-t border-slate-800/80 pt-4 text-xs">
         <Link
           href={`/devflow-saas/projects/${project.id}`}
-          className="font-medium text-cyan-400 hover:text-cyan-300 transition"
+          className="font-semibold text-cyan-400 hover:text-cyan-300 focus-visible:outline-2 focus-visible:outline-cyan-400"
         >
-          View Kanban &rarr;
+          {project.isArchived
+            ? "View Archive (Read-Only) →"
+            : "View Board & Deliverables →"}
         </Link>
       </div>
     </li>

@@ -148,6 +148,14 @@ database.exec(`
     ('task-401', 'proj-4', 'Thermal Safety Interlocks', 'Calibrate magnetic containment sensors for 100GW output spikes.', 'In Progress', 'Urgent', 'Nelson Rivera', 'infra', date('now', '+1 day')),
     ('task-501', 'proj-5', 'Optimize Attention Mechanism', 'Quantize transformer weights for on-device flight helmet compute.', 'Todo', 'High', 'Devin Zhao', 'backend', date('now', '+5 days'));
 
+  -- Explicitly update existing tasks with due dates and tags
+  UPDATE devflow_tasks SET due_date = date('now', '+3 days'), tag = 'security' WHERE id = 'task-101';
+  UPDATE devflow_tasks SET due_date = date('now'), tag = 'backend' WHERE id = 'task-102';
+  UPDATE devflow_tasks SET due_date = date('now', '-2 days'), tag = 'infra' WHERE id = 'task-103';
+  UPDATE devflow_tasks SET due_date = date('now', '+7 days'), tag = 'frontend' WHERE id = 'task-201';
+  UPDATE devflow_tasks SET due_date = date('now', '+1 day'), tag = 'infra' WHERE id = 'task-401';
+  UPDATE devflow_tasks SET due_date = date('now', '+5 days'), tag = 'backend' WHERE id = 'task-501';
+
   -- Seed Comments
   INSERT OR IGNORE INTO devflow_comments (id, task_id, user_id, user_name, content, created_at) VALUES
     ('comm-1', 'task-101', 'user-2', 'Sarah Connor', 'Verified the RSA public key rotation logic. Looking solid!', datetime('now', '-25 minutes')),

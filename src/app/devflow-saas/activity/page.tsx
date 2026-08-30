@@ -90,7 +90,7 @@ export default async function ActivityPage() {
                   {/* Timeline Dot Icon */}
                   <span
                     aria-hidden="true"
-                    className="absolute -left-[35px] sm:-left-[43px] top-1 flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-xs shadow-md"
+                    className="absolute -left-35px sm:-left-43px top-1 flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-xs shadow-md"
                   >
                     {meta.icon}
                   </span>

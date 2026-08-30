@@ -2,12 +2,14 @@
  * ============================================================================
  * DEVFLOW SAAS — SECURITY & TENANT BOUNDARY AUTOMATED TEST SUITE
  * ============================================================================
- * Tests the REAL production security and tenant isolation functions:
+ * Runs all security & tenant tests against an ISOLATED TEMPORARY SQLite Database.
+ * The production/developer devflow.db is 100% untouched.
+ *
  * 1. Pure Security Core (security-core.ts)
  *    - Runtime Role Allowlist & Validation (isUserRole, validateUserRole)
  *    - API Key Scope Allowlist (validateApiScopes)
  *    - Pure Admin Authorization Check (checkDemoAdmin)
- * 2. Database-Dependent Security (security-access.ts)
+ * 2. Database-Dependent Security (security-access.ts via Isolated DB)
  *    - Real SHA-256 API Key Validation & Scope Check (validateApiKeyAndScope)
  *    - Real Expired & Revoked Key Rejection (validateApiKeyAndScope)
  *    - Real Project Tenant Isolation (checkDemoProjectAccess)
@@ -19,10 +21,18 @@
  */
 
 import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import Database from "better-sqlite3";
 
-// REAL Pure Production Functions
+// 1. Setup Isolated Temporary Database Path BEFORE importing application modules
+const tempDbPath = path.join(
+  os.tmpdir(),
+  `devflow-test-security-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.db`,
+);
+process.env.DEVFLOW_DB_PATH = tempDbPath;
+
+// 2. Pure Security Core (No DB dependency)
 import {
   USER_ROLES,
   isUserRole,
@@ -32,20 +42,19 @@ import {
   checkDemoAdmin,
 } from "../src/app/devflow-saas/lib/security-core.ts";
 
-// REAL DB-Dependent Production Functions
-import {
+// 3. Dynamically import database and real security access functions with isolated DB
+const { db } = await import("../src/app/devflow-saas/lib/db.ts");
+const {
   validateApiKeyAndScope,
   checkDemoProjectAccess,
   checkDemoTaskAccess,
   checkDemoMilestoneAccess,
   checkDemoApiKeyAccess,
-} from "../src/app/devflow-saas/lib/security-access.ts";
-
-const dbPath = path.resolve(process.cwd(), "devflow.db");
-const db = new Database(dbPath);
+} = await import("../src/app/devflow-saas/lib/security-access.ts");
 
 console.log("\n============================================================");
 console.log("🛡️  RUNNING DEVFLOW REAL SECURITY & BOUNDARY TEST SUITE");
+console.log(`📦 ISOLATED TEST DATABASE: ${tempDbPath}`);
 console.log("============================================================\n");
 
 let passedCount = 0;
@@ -60,6 +69,28 @@ function assert(condition, message) {
     failedCount++;
   }
 }
+
+// ----------------------------------------------------------------------------
+// SEED BASELINE TEST FIXTURES IN ISOLATED DATABASE
+// ----------------------------------------------------------------------------
+db.exec(`
+  INSERT INTO devflow_organizations (id, name, slug, plan) VALUES
+    ('org-1', 'Acme Corporation', 'acme-corp', 'Pro'),
+    ('org-2', 'Beta Industries', 'beta-ind', 'Free');
+
+  INSERT INTO devflow_users (id, name, email, role) VALUES
+    ('usr-1', 'Alice Admin', 'alice@acme.com', 'Admin'),
+    ('usr-2', 'Bob Member', 'bob@acme.com', 'Member'),
+    ('usr-3', 'Charlie Viewer', 'charlie@acme.com', 'Viewer');
+
+  INSERT INTO devflow_projects (id, org_id, name, key, description, status) VALUES
+    ('proj-1', 'org-1', 'Core Platform', 'CORE', 'Main infrastructure', 'Active'),
+    ('proj-2', 'org-2', 'Beta Project', 'BETA', 'Secondary org project', 'Active');
+
+  INSERT INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name) VALUES
+    ('task-1', 'proj-1', 'Initial Setup', 'Bootstrap repo', 'In Progress', 'High', 'Alice Admin'),
+    ('task-2', 'proj-2', 'Beta Task', 'Beta testing task', 'Todo', 'Medium', 'Bob Member');
+`);
 
 // ----------------------------------------------------------------------------
 // SECTION A: PURE SECURITY CORE TESTS (Zero DB, Zero Network, Pure Functions)
@@ -154,7 +185,7 @@ console.log(
   "\n--- SECTION B: SERVER DATABASE SECURITY & TENANT BOUNDARIES ---",
 );
 
-// TEST 4: Real SHA-256 API Key Authentication & Scope Enforcement (Calling REAL validateApiKeyAndScope)
+// TEST 4: Real SHA-256 API Key Authentication & Scope Enforcement
 console.log("TEST 4: Real SHA-256 API Key Authentication & Scope Enforcement");
 const rawApiKey = `df_live_test_${crypto.randomBytes(16).toString("hex")}`;
 const keyHash = crypto.createHash("sha256").update(rawApiKey).digest("hex");
@@ -189,7 +220,7 @@ assert(
   "Unknown API key fails authentication",
 );
 
-// TEST 5: Real Expired & Revoked API Key Validation (Calling REAL validateApiKeyAndScope)
+// TEST 5: Real Expired & Revoked API Key Validation
 console.log("\nTEST 5: Real Expired & Revoked API Key Validation");
 const expiredRawKey = `df_live_expired_${crypto.randomBytes(16).toString("hex")}`;
 const expiredHash = crypto
@@ -235,7 +266,7 @@ assert(
   "Revoked API key (is_active = 0) is rejected",
 );
 
-// TEST 6: Real Tenant Isolation for Projects (Calling REAL checkDemoProjectAccess)
+// TEST 6: Real Tenant Isolation for Projects
 console.log("\nTEST 6: Real Tenant Isolation for Projects");
 const validProjectAccess = checkDemoProjectAccess("proj-1", "org-1");
 assert(
@@ -250,34 +281,22 @@ assert(
   "Org-2 is strictly blocked from accessing Org-1's project proj-1",
 );
 
-// TEST 7: Real Tenant Isolation for Tasks (Calling REAL checkDemoTaskAccess)
+// TEST 7: Real Tenant Isolation for Tasks
 console.log("\nTEST 7: Real Tenant Isolation for Tasks");
-const org1Task = db
-  .prepare(
-    `
-  SELECT t.id FROM devflow_tasks t
-  JOIN devflow_projects p ON p.id = t.project_id
-  WHERE p.org_id = 'org-1' LIMIT 1
-`,
-  )
-  .get();
+const validTaskAccess = checkDemoTaskAccess("task-1", "org-1");
+assert(
+  validTaskAccess.authorized && validTaskAccess.task?.id === "task-1",
+  "Org-1 successfully accesses task task-1",
+);
 
-if (org1Task) {
-  const validTaskAccess = checkDemoTaskAccess(org1Task.id, "org-1");
-  assert(
-    validTaskAccess.authorized && validTaskAccess.task?.id === org1Task.id,
-    `Org-1 successfully accesses task ${org1Task.id}`,
-  );
+const crossTenantTaskAccess = checkDemoTaskAccess("task-1", "org-2");
+assert(
+  !crossTenantTaskAccess.authorized &&
+    crossTenantTaskAccess.error?.includes("Task not found"),
+  "Org-2 is strictly blocked from accessing Org-1's task task-1",
+);
 
-  const crossTenantTaskAccess = checkDemoTaskAccess(org1Task.id, "org-2");
-  assert(
-    !crossTenantTaskAccess.authorized &&
-      crossTenantTaskAccess.error?.includes("Task not found"),
-    `Org-2 is strictly blocked from accessing Org-1's task ${org1Task.id}`,
-  );
-}
-
-// TEST 8: Real Milestone Relational Ownership Guard (Calling REAL checkDemoMilestoneAccess)
+// TEST 8: Real Milestone Relational Ownership Guard
 console.log("\nTEST 8: Real Milestone Relational Ownership Guard");
 const msTestProj1 = "proj-1";
 const msTestProj2 = "proj-2";
@@ -316,7 +335,7 @@ assert(
   "Milestone assignment to mismatched project proj-2 is rejected",
 );
 
-// TEST 9: Real Tenant Isolation for API Keys (Calling REAL checkDemoApiKeyAccess)
+// TEST 9: Real Tenant Isolation for API Keys
 console.log("\nTEST 9: Real Tenant Isolation for API Keys");
 const validKeyAccess = checkDemoApiKeyAccess(testKeyId, "org-1");
 assert(
@@ -354,12 +373,16 @@ for (const idxName of expectedIndexes) {
 }
 
 // ----------------------------------------------------------------------------
-// CLEANUP & SUMMARY
+// TEARDOWN & CLEANUP OF ISOLATED TEST DATABASE
 // ----------------------------------------------------------------------------
-db.prepare(
-  "DELETE FROM devflow_api_keys WHERE id LIKE 'key-test-%' OR id LIKE 'key-exp-%' OR id LIKE 'key-rev-%'",
-).run();
-db.prepare("DELETE FROM devflow_milestones WHERE id = ?").run(msTestId);
+try {
+  db.close();
+  if (fs.existsSync(tempDbPath)) fs.unlinkSync(tempDbPath);
+  if (fs.existsSync(`${tempDbPath}-shm`)) fs.unlinkSync(`${tempDbPath}-shm`);
+  if (fs.existsSync(`${tempDbPath}-wal`)) fs.unlinkSync(`${tempDbPath}-wal`);
+} catch (err) {
+  console.warn("Notice: Cleanup of temporary test database:", err);
+}
 
 console.log("\n============================================================");
 console.log(`TEST SUMMARY: ${passedCount} passed, ${failedCount} failed`);

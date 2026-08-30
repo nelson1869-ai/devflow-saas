@@ -1,7 +1,9 @@
 import Database from "better-sqlite3";
 import path from "node:path";
 
-const dbPath = path.resolve(process.cwd(), "devflow.db");
+const dbPath = process.env.DEVFLOW_DB_PATH
+  ? path.resolve(process.env.DEVFLOW_DB_PATH)
+  : path.resolve(process.cwd(), "devflow.db");
 
 // Singleton connection to SQLite
 const globalForDb = global as unknown as { db?: Database.Database };

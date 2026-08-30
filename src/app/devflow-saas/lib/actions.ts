@@ -3,6 +3,8 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "./db";
+import { getCurrentUser } from "./auth";
+import { logActivity } from "./activity";
 import type { ProjectStatus } from "../projects/types";
 import type { TaskPriority, TaskStatus } from "../tasks/types";
 
@@ -39,6 +41,7 @@ export async function switchActiveOrgAction(orgId: string): Promise<void> {
 export async function createProjectAction(
   formData: FormData,
 ): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
   const cookieStore = await cookies();
   const orgId =
     (formData.get("orgId") as string | null)?.trim() ||
@@ -67,7 +70,17 @@ export async function createProjectAction(
 
     stmt.run(id, orgId, name, key, description, status);
 
+    logActivity(
+      orgId,
+      id,
+      currentUser.name,
+      "created_project",
+      name,
+      `Project established with key ${key} (${status}).`,
+    );
+
     revalidatePath("/devflow-saas/projects");
+    revalidatePath("/devflow-saas/activity");
     return { success: true };
   } catch (err: unknown) {
     if (
@@ -86,11 +99,31 @@ export async function createProjectAction(
 export async function deleteProjectAction(
   projectId: string,
 ): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
   try {
+    const projectStmt = db.prepare(
+      "SELECT name, org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { name: string; org_id: string }
+      | undefined;
+
     const stmt = db.prepare("DELETE FROM devflow_projects WHERE id = ?");
     stmt.run(projectId);
 
+    if (project) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "deleted_project",
+        project.name,
+        "Deleted project and all associated tasks.",
+      );
+    }
+
     revalidatePath("/devflow-saas/projects");
+    revalidatePath("/devflow-saas/activity");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to delete project from database." };
@@ -100,6 +133,7 @@ export async function deleteProjectAction(
 export async function createTaskAction(
   formData: FormData,
 ): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
   const projectId = (formData.get("projectId") as string | null)?.trim();
   const title = (formData.get("title") as string | null)?.trim();
   const description = (formData.get("description") as string | null)?.trim();
@@ -121,7 +155,26 @@ export async function createTaskAction(
 
     stmt.run(id, projectId, title, description, status, priority, assigneeName);
 
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    if (project) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "created_task",
+        title,
+        `Assigned to ${assigneeName} (${priority} priority).`,
+      );
+    }
+
     revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/activity");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to create task in database." };
@@ -131,6 +184,7 @@ export async function createTaskAction(
 export async function updateTaskAction(
   formData: FormData,
 ): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
   const taskId = (formData.get("taskId") as string | null)?.trim();
   const projectId = (formData.get("projectId") as string | null)?.trim();
   const title = (formData.get("title") as string | null)?.trim();
@@ -153,7 +207,26 @@ export async function updateTaskAction(
 
     stmt.run(title, description, status, priority, assigneeName, taskId);
 
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    if (project) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "updated_task",
+        title,
+        `Details updated: ${status}, ${priority} priority, assigned to ${assigneeName}.`,
+      );
+    }
+
     revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/activity");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to update task in database." };
@@ -165,7 +238,11 @@ export async function updateTaskStatusAction(
   newStatus: TaskStatus,
   projectId: string,
 ): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
   try {
+    const taskStmt = db.prepare("SELECT title FROM devflow_tasks WHERE id = ?");
+    const task = taskStmt.get(taskId) as { title: string } | undefined;
+
     const stmt = db.prepare(`
       UPDATE devflow_tasks
       SET status = ?
@@ -174,7 +251,26 @@ export async function updateTaskStatusAction(
 
     stmt.run(newStatus, taskId);
 
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    if (project && task) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "updated_task_status",
+        task.title,
+        `Stage moved to ${newStatus}.`,
+      );
+    }
+
     revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/activity");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to update task status." };
@@ -185,11 +281,34 @@ export async function deleteTaskAction(
   taskId: string,
   projectId: string,
 ): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
   try {
+    const taskStmt = db.prepare("SELECT title FROM devflow_tasks WHERE id = ?");
+    const task = taskStmt.get(taskId) as { title: string } | undefined;
+
     const stmt = db.prepare("DELETE FROM devflow_tasks WHERE id = ?");
     stmt.run(taskId);
 
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    if (project && task) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "deleted_task",
+        task.title,
+        "Task permanently removed.",
+      );
+    }
+
     revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/activity");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to delete task from database." };

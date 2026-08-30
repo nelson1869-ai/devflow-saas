@@ -10,8 +10,10 @@ import {
   archiveProjectAction,
   restoreProjectAction,
   deleteProjectAction,
+  generateAIPlanAction,
 } from "../lib/actions";
 import { projectTemplates, type ProjectTemplate } from "../lib/templates";
+import type { AIProjectPlan } from "../lib/ai-planner";
 
 type ProjectsViewProps = Readonly<{
   initialProjects: readonly Project[];
@@ -40,18 +42,21 @@ export function ProjectsView({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Template & Form State
+  // AI & Template Creation Mode
+  const [plannerMode, setPlannerMode] = useState<"ai" | "classic">("ai");
   const [selectedTemplateId, setSelectedTemplateId] =
     useState<string>("scrum-sprint");
-  const defaultTemplate =
-    projectTemplates.find((t) => t.id === "scrum-sprint") ||
-    projectTemplates[0];
 
-  const [name, setName] = useState(defaultTemplate.name);
-  const [key, setKey] = useState(defaultTemplate.defaultKey);
-  const [description, setDescription] = useState(defaultTemplate.description);
+  // Form Fields
+  const [name, setName] = useState("");
+  const [key, setKey] = useState("");
+  const [description, setDescription] = useState("");
   const [status, setStatus] = useState<ProjectStatus>("Active");
   const [formError, setFormError] = useState<string | null>(null);
+
+  // AI Analysis State
+  const [aiPlan, setAiPlan] = useState<AIProjectPlan | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // React 19 Render-time state synchronization
   if (initialProjects !== prevInitialProjects) {
@@ -69,6 +74,30 @@ export function ProjectsView({
       setName("");
       setKey("");
       setDescription("");
+    }
+  };
+
+  const handleAnalyzeAIPlan = async () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setFormError("Please enter a Project Name first for AI to analyze.");
+      return;
+    }
+    setFormError(null);
+    setIsAnalyzing(true);
+
+    try {
+      const res = await generateAIPlanAction(trimmedName, description.trim());
+      if (res.success && res.plan) {
+        setAiPlan(res.plan);
+        if (!key.trim()) {
+          setKey(res.plan.suggestedKey);
+        }
+      } else {
+        setFormError(res.error || "Failed to analyze project plan with AI.");
+      }
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -96,7 +125,15 @@ export function ProjectsView({
     formData.append("key", trimmedKey);
     formData.append("description", trimmedDescription);
     formData.append("status", status);
-    formData.append("templateId", selectedTemplateId);
+
+    if (plannerMode === "ai") {
+      formData.append("templateId", "ai-smart-plan");
+      if (aiPlan) {
+        formData.append("aiPlanJson", JSON.stringify(aiPlan));
+      }
+    } else {
+      formData.append("templateId", selectedTemplateId);
+    }
 
     // Optimistic UI update
     const optimisticProject: Project = {
@@ -121,7 +158,7 @@ export function ProjectsView({
         setKey("");
         setDescription("");
         setStatus("Active");
-        setSelectedTemplateId("scrum-sprint");
+        setAiPlan(null);
         setIsFormOpen(false);
       }
     });
@@ -197,10 +234,6 @@ export function ProjectsView({
     return matchesSearch;
   });
 
-  const activeTemplate = projectTemplates.find(
-    (t) => t.id === selectedTemplateId,
-  );
-
   const archivedCount = projects.filter((p) => p.isArchived).length;
 
   return (
@@ -222,7 +255,16 @@ export function ProjectsView({
 
           <button
             type="button"
-            onClick={() => setIsFormOpen((prev) => !prev)}
+            onClick={() => {
+              setIsFormOpen((prev) => !prev);
+              if (!isFormOpen) {
+                setName("");
+                setKey("");
+                setDescription("");
+                setAiPlan(null);
+                setPlannerMode("ai");
+              }
+            }}
             className={[
               "inline-flex items-center justify-center rounded-lg px-4 py-2 text-xs font-semibold transition",
               "focus-visible:outline-2 focus-visible:outline-cyan-400",
@@ -235,63 +277,97 @@ export function ProjectsView({
           </button>
         </header>
 
-        {/* Create Project Form with Starter Templates */}
+        {/* Create Project Form with AI Smart Planner */}
         {isFormOpen && (
           <section
             aria-labelledby="create-project-heading"
-            className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-6 shadow-sm ring-1 ring-cyan-500/20"
+            className="rounded-2xl border border-cyan-500/40 bg-slate-900/90 p-6 shadow-xl ring-1 ring-cyan-500/30"
           >
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+            {/* Header */}
+            <div className="flex flex-col gap-3 border-b border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2
-                  id="create-project-heading"
-                  className="text-base font-semibold text-white"
-                >
-                  Create New Engineering Project
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Select a starter framework template or build a customized
-                  workflow from scratch.
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">✨</span>
+                  <h2
+                    id="create-project-heading"
+                    className="text-base font-bold text-white"
+                  >
+                    Create New Engineering Project
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Let AI intelligently analyze your requirements or select a
+                  classic framework template.
                 </p>
               </div>
-              <span className="rounded-full bg-cyan-500/10 px-2.5 py-1 text-xs font-medium text-cyan-300">
-                {activeTemplate?.name || "Custom"}
-              </span>
-            </div>
 
-            {/* Template Selector Carousel / Grid */}
-            <div className="mt-4 space-y-2">
-              <label className="block text-xs font-medium text-slate-300">
-                Starter Templates
-              </label>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {projectTemplates.map((template) => {
-                  const isSelected = selectedTemplateId === template.id;
-                  return (
-                    <button
-                      key={template.id}
-                      type="button"
-                      onClick={() => handleSelectTemplate(template)}
-                      className={[
-                        "flex flex-col items-start rounded-xl border p-3 text-left transition",
-                        isSelected
-                          ? "border-cyan-400 bg-cyan-500/10 shadow-sm"
-                          : "border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-900/60",
-                      ].join(" ")}
-                    >
-                      <span className="text-xl">{template.icon}</span>
-                      <span className="mt-1 text-xs font-bold text-slate-200">
-                        {template.name}
-                      </span>
-                      <span className="text-[10px] text-slate-400 line-clamp-2">
-                        {template.description}
-                      </span>
-                    </button>
-                  );
-                })}
+              {/* Mode Switcher Tabs */}
+              <div className="flex items-center rounded-xl bg-slate-950 p-1 border border-slate-800 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPlannerMode("ai")}
+                  className={[
+                    "rounded-lg px-3 py-1.5 font-bold transition flex items-center gap-1.5",
+                    plannerMode === "ai"
+                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-xs"
+                      : "text-slate-400 hover:text-slate-200",
+                  ].join(" ")}
+                >
+                  <span>✨</span>
+                  <span>AI Smart Plan</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPlannerMode("classic")}
+                  className={[
+                    "rounded-lg px-3 py-1.5 font-medium transition flex items-center gap-1.5",
+                    plannerMode === "classic"
+                      ? "bg-slate-800 text-white font-bold"
+                      : "text-slate-400 hover:text-slate-200",
+                  ].join(" ")}
+                >
+                  <span>📋</span>
+                  <span>Classic Presets</span>
+                </button>
               </div>
             </div>
 
+            {/* Classic Presets Grid (Shown only in classic mode) */}
+            {plannerMode === "classic" && (
+              <div className="mt-4 space-y-2">
+                <label className="block text-xs font-medium text-slate-300">
+                  Select Starter Framework
+                </label>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {projectTemplates.map((template) => {
+                    const isSelected = selectedTemplateId === template.id;
+                    return (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => handleSelectTemplate(template)}
+                        className={[
+                          "flex flex-col items-start rounded-xl border p-3 text-left transition",
+                          isSelected
+                            ? "border-cyan-400 bg-cyan-500/10 shadow-sm"
+                            : "border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-900/60",
+                        ].join(" ")}
+                      >
+                        <span className="text-xl">{template.icon}</span>
+                        <span className="mt-1 text-xs font-bold text-slate-200">
+                          {template.name}
+                        </span>
+                        <span className="text-[10px] text-slate-400 line-clamp-2">
+                          {template.description}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Form */}
             <form onSubmit={handleCreateProject} className="mt-6 space-y-4">
               {formError && (
                 <div
@@ -315,7 +391,7 @@ export function ProjectsView({
                     type="text"
                     required
                     disabled={isPending}
-                    placeholder="e.g. Core Infrastructure Migration"
+                    placeholder="e.g. Next.js 15 Frontend Storefront"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
@@ -334,7 +410,7 @@ export function ProjectsView({
                     type="text"
                     required
                     disabled={isPending}
-                    placeholder="e.g. BILL"
+                    placeholder={aiPlan?.suggestedKey || "e.g. WEB"}
                     value={key}
                     onChange={(e) => setKey(e.target.value.toUpperCase())}
                     maxLength={6}
@@ -348,19 +424,108 @@ export function ProjectsView({
                   htmlFor="project-description"
                   className="block text-xs font-medium text-slate-300"
                 >
-                  Description
+                  Description & Requirements Prompt
                 </label>
                 <textarea
                   id="project-description"
                   rows={2}
                   required
                   disabled={isPending}
-                  placeholder="Describe the goals and deliverables..."
+                  placeholder="Describe your project goals, tech stack, and deliverables for AI to analyze..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400 disabled:opacity-50"
                 />
               </div>
+
+              {/* AI Read & Analyze Trigger Button */}
+              {plannerMode === "ai" && (
+                <div className="flex items-center justify-between rounded-xl bg-cyan-950/20 border border-cyan-500/30 p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🧠</span>
+                    <p className="text-xs text-slate-300">
+                      {aiPlan
+                        ? "AI synthesized your custom sprint plan! Review tasks below before creating."
+                        : "Click to let AI analyze your title & requirements to build your task roadmap."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isAnalyzing || !name.trim()}
+                    onClick={handleAnalyzeAIPlan}
+                    className="shrink-0 rounded-lg bg-cyan-500/20 px-3 py-1.5 text-xs font-bold text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 transition disabled:opacity-50"
+                  >
+                    {isAnalyzing
+                      ? "Analyzing Architecture..."
+                      : aiPlan
+                        ? "✨ Re-Analyze with AI"
+                        : "✨ Analyze & Plan with AI"}
+                  </button>
+                </div>
+              )}
+
+              {/* AI Plan Preview Box */}
+              {plannerMode === "ai" && aiPlan && (
+                <div className="rounded-xl border border-cyan-500/30 bg-slate-950 p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{aiPlan.domainIcon}</span>
+                      <span className="text-xs font-bold text-cyan-300">
+                        {aiPlan.domainLabel}
+                      </span>
+                      <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-300">
+                        Key: {aiPlan.suggestedKey}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      {aiPlan.tasks.length} Deliverables Synthesized
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-300">
+                    {aiPlan.summaryAnalysis}
+                  </p>
+
+                  {/* Tasks Preview List */}
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1 divide-y divide-slate-800/60">
+                    {aiPlan.tasks.map((task, idx) => (
+                      <div
+                        key={task.title}
+                        className="pt-2 first:pt-0 space-y-1"
+                      >
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-white">
+                            {idx + 1}. {task.title}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-cyan-300">
+                              #{task.tag}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {task.estimatedHours}h
+                            </span>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-slate-400">
+                          {task.description}
+                        </p>
+                        {task.subtasks && task.subtasks.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {task.subtasks.map((st) => (
+                              <span
+                                key={st}
+                                className="rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-slate-400 border border-slate-800"
+                              >
+                                ✓ {st}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label
@@ -392,10 +557,14 @@ export function ProjectsView({
                 </button>
                 <button
                   type="submit"
-                  disabled={isPending}
-                  className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-50"
+                  disabled={isPending || isAnalyzing}
+                  className="rounded-lg bg-cyan-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-300 disabled:opacity-50 transition"
                 >
-                  {isPending ? "Establishing Project..." : "Create Project"}
+                  {isPending
+                    ? "Establishing Project..."
+                    : plannerMode === "ai"
+                      ? `🚀 Create with AI Plan (${aiPlan ? aiPlan.tasks.length : "Auto"} Tasks)`
+                      : "Create Project"}
                 </button>
               </div>
             </form>
@@ -450,7 +619,7 @@ export function ProjectsView({
                   <span>{option === "Archived" ? "📦 Archived" : option}</span>
                   <span
                     className={[
-                      "rounded-full px-1.5 py-0.2 text-[10px] font-bold font-mono",
+                      "rounded-full px-1.5 py-0.2 text-[10px] font-bold",
                       isSelected
                         ? "bg-slate-950/20 text-slate-950"
                         : "bg-slate-800 text-slate-400",
@@ -463,50 +632,43 @@ export function ProjectsView({
             })}
           </div>
 
-          <div className="relative w-full sm:w-64">
+          <div className="w-full sm:w-72">
             <input
               type="search"
-              placeholder="Filter by name, key, description..."
+              placeholder="Search projects..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-100 placeholder-slate-500 transition hover:border-slate-700 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+              className="w-full rounded-lg border border-slate-800 bg-slate-900/80 px-3.5 py-1.5 text-xs text-slate-100 placeholder-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
             />
           </div>
         </section>
 
-        {/* Project Cards Grid */}
-        <section aria-labelledby="project-list-heading">
-          <h2 id="project-list-heading" className="sr-only">
-            Project List
-          </h2>
-
+        {/* Project Grid */}
+        <section aria-label="Projects List">
           {filteredProjects.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-800 p-12 text-center">
-              <span className="text-2xl">
-                {selectedFilter === "Archived" ? "📦" : "📁"}
-              </span>
-              <p className="mt-2 text-sm text-slate-400">
-                {selectedFilter === "Archived"
-                  ? "No archived projects in cold storage."
-                  : "No projects found matching your criteria."}
+              <span className="text-3xl">📁</span>
+              <h3 className="mt-3 text-sm font-semibold text-slate-200">
+                No projects found
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                {searchQuery
+                  ? "Try refining your search query."
+                  : "Get started by creating a new engineering project."}
               </p>
             </div>
           ) : (
-            <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {filteredProjects.map((project) => (
                 <ProjectCard
                   key={project.id}
                   project={project}
                   onArchive={handleArchiveProject}
                   onRestore={handleRestoreProject}
-                  onDelete={
-                    currentUser.role === "Admin"
-                      ? handleDeleteProject
-                      : undefined
-                  }
+                  onDelete={handleDeleteProject}
                 />
               ))}
-            </ul>
+            </div>
           )}
         </section>
       </div>

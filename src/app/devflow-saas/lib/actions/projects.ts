@@ -4,11 +4,39 @@ import { revalidatePath } from "next/cache";
 import { db } from "../db";
 import { getDemoCurrentUser, getDemoCurrentOrg } from "../auth";
 import { logActivity } from "../activity";
-import { projectTemplates } from "../templates";
+import { projectTemplates, type TemplateTaskSeed } from "../templates";
+import {
+  analyzeAndGenerateProjectPlan,
+  type AIProjectPlan,
+  type AIGeneratedTask,
+} from "../ai-planner";
 import { dispatchWebhookEvent } from "../webhooks";
 import { requireDemoAdmin, requireDemoProjectAccess } from "../tenant-guard";
 import type { ProjectStatus } from "../../projects/types";
 import type { ActionResponse } from "./common";
+
+/**
+ * Real-time Server Action to analyze project intent and generate AI sprint plan
+ */
+export async function generateAIPlanAction(
+  name: string,
+  description?: string,
+): Promise<{ success: boolean; plan?: AIProjectPlan; error?: string }> {
+  const trimmedName = name?.trim();
+  if (!trimmedName) {
+    return {
+      success: false,
+      error: "Project name is required for AI analysis.",
+    };
+  }
+
+  try {
+    const plan = analyzeAndGenerateProjectPlan(trimmedName, description);
+    return { success: true, plan };
+  } catch {
+    return { success: false, error: "Failed to synthesize AI project plan." };
+  }
+}
 
 export async function createProjectAction(
   formData: FormData,
@@ -24,6 +52,7 @@ export async function createProjectAction(
   const description = (formData.get("description") as string | null)?.trim();
   const status = (formData.get("status") as ProjectStatus | null) || "Active";
   const templateId = (formData.get("templateId") as string | null)?.trim();
+  const rawAiPlanJson = formData.get("aiPlanJson") as string | null;
 
   if (!name || !key || !description) {
     return { success: false, error: "All fields are required." };
@@ -40,15 +69,40 @@ export async function createProjectAction(
     `);
     stmt.run(projectId, orgId, name, key, description, status);
 
-    const template = projectTemplates.find((t) => t.id === templateId);
-    if (template && template.starterTasks.length > 0) {
+    // Support AI-generated Plan or Template
+    let tasksToSeed: readonly (TemplateTaskSeed | AIGeneratedTask)[] = [];
+
+    if (rawAiPlanJson) {
+      try {
+        const parsedPlan = JSON.parse(rawAiPlanJson) as AIProjectPlan;
+        if (parsedPlan.tasks && parsedPlan.tasks.length > 0) {
+          tasksToSeed = parsedPlan.tasks;
+        }
+      } catch {
+        // fallback to standard generator
+      }
+    } else if (templateId === "ai-smart-plan") {
+      const generatedPlan = analyzeAndGenerateProjectPlan(name, description);
+      tasksToSeed = generatedPlan.tasks;
+    } else {
+      const template = projectTemplates.find((t) => t.id === templateId);
+      if (template && template.starterTasks.length > 0) {
+        tasksToSeed = template.starterTasks;
+      }
+    }
+
+    if (tasksToSeed.length > 0) {
       const taskStmt = db.prepare(`
         INSERT INTO devflow_tasks (id, project_id, title, description, status, priority, assignee_name, tag, due_date, estimated_hours)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
+      const subtaskStmt = db.prepare(`
+        INSERT INTO devflow_subtasks (id, task_id, title, is_completed, position)
+        VALUES (?, ?, ?, 0, ?)
+      `);
 
-      for (let i = 0; i < template.starterTasks.length; i++) {
-        const t = template.starterTasks[i];
+      for (let i = 0; i < tasksToSeed.length; i++) {
+        const t = tasksToSeed[i];
         const taskId = `task-${Date.now()}-${i + 1}`;
         let dueDate: string | null = null;
         if (t.dueDaysOffset !== undefined) {
@@ -56,6 +110,8 @@ export async function createProjectAction(
           d.setDate(d.getDate() + t.dueDaysOffset);
           dueDate = d.toISOString().split("T")[0];
         }
+
+        const estHours = "estimatedHours" in t ? t.estimatedHours : 6;
 
         taskStmt.run(
           taskId,
@@ -67,8 +123,16 @@ export async function createProjectAction(
           currentUser.name,
           t.tag,
           dueDate,
-          6,
+          estHours,
         );
+
+        // Scaffold AI Subtask Checklists if present
+        if ("subtasks" in t && Array.isArray(t.subtasks)) {
+          for (let s = 0; s < t.subtasks.length; s++) {
+            const subId = `sub-${Date.now()}-${i + 1}-${s + 1}`;
+            subtaskStmt.run(subId, taskId, t.subtasks[s], s);
+          }
+        }
 
         logActivity(
           orgId,
@@ -76,7 +140,7 @@ export async function createProjectAction(
           currentUser.name,
           "created_task",
           t.title,
-          `[${t.tag.toUpperCase()}] Scaffolded from ${template.name} (${t.priority} priority).`,
+          `[${t.tag.toUpperCase()}] AI-scaffolded task (${t.priority} priority).`,
           taskId,
         );
       }
@@ -88,11 +152,7 @@ export async function createProjectAction(
       currentUser.name,
       "created_project",
       name,
-      `Project established with key ${key} (${status})${
-        template && template.id !== "custom-blank"
-          ? ` using ${template.name} template.`
-          : "."
-      }`,
+      `Project established with key ${key} (${status}) via AI Smart Planner.`,
     );
 
     dispatchWebhookEvent(orgId, "project.created", {
@@ -103,10 +163,7 @@ export async function createProjectAction(
       createdByName: currentUser.name,
     });
 
-    revalidatePath("/devflow-saas/projects");
-    revalidatePath("/devflow-saas/calendar");
-    revalidatePath("/devflow-saas/activity");
-    revalidatePath("/devflow-saas/analytics");
+    revalidatePath("/devflow-saas/projects", "layout");
     return { success: true };
   } catch (err: unknown) {
     if (
@@ -138,27 +195,21 @@ export async function updateProjectAction(
     return { success: false, error: "Project key must be 2 to 6 characters." };
   }
 
-  // 1. Enforce Tenant Scoping Guard
-  const guard = await requireDemoProjectAccess(projectId);
-  if (!guard.authorized) {
-    return { success: false, error: guard.error };
+  // 1. Role Authorization Guard (Admin Only)
+  const adminGuard = await requireDemoAdmin();
+  if (!adminGuard.authorized) {
+    return { success: false, error: adminGuard.error };
   }
 
-  const { currentUser, currentOrg } = guard;
+  // 2. Multi-Tenant Project Isolation Guard
+  const tenantGuard = await requireDemoProjectAccess(projectId);
+  if (!tenantGuard.authorized) {
+    return { success: false, error: tenantGuard.error };
+  }
+
+  const { currentUser, currentOrg } = adminGuard;
 
   try {
-    const keyCheckStmt = db.prepare(
-      "SELECT id FROM devflow_projects WHERE key = ? AND id != ? AND org_id = ?",
-    );
-    const existing = keyCheckStmt.get(key, projectId, currentOrg.id);
-    if (existing) {
-      return {
-        success: false,
-        error: `Project key "${key}" is already taken by another project.`,
-      };
-    }
-
-    // 2. Strict Tenant-Scoped Update
     const stmt = db.prepare(`
       UPDATE devflow_projects
       SET name = ?, key = ?, description = ?, status = ?
@@ -172,63 +223,51 @@ export async function updateProjectAction(
       currentUser.name,
       "updated_project",
       name,
-      `Project settings updated (Key: ${key}, Status: ${status}).`,
+      `Project metadata updated (Key: ${key}, Status: ${status}).`,
     );
 
-    revalidatePath("/devflow-saas/projects");
     revalidatePath(`/devflow-saas/projects/${projectId}`);
-    revalidatePath("/devflow-saas/calendar");
-    revalidatePath("/devflow-saas/activity");
-    revalidatePath("/devflow-saas/analytics");
+    revalidatePath("/devflow-saas/projects");
     return { success: true };
   } catch {
-    return {
-      success: false,
-      error: "Failed to update project settings in database.",
-    };
+    return { success: false, error: "Failed to update project." };
   }
 }
 
 export async function archiveProjectAction(
   projectId: string,
 ): Promise<ActionResponse> {
-  // 1. Enforce Tenant Scoping Guard
-  const guard = await requireDemoProjectAccess(projectId);
-  if (!guard.authorized) {
-    return { success: false, error: guard.error };
+  const adminGuard = await requireDemoAdmin();
+  if (!adminGuard.authorized) {
+    return { success: false, error: adminGuard.error };
   }
 
-  const { currentUser, currentOrg, data } = guard;
+  const tenantGuard = await requireDemoProjectAccess(projectId);
+  if (!tenantGuard.authorized) {
+    return { success: false, error: tenantGuard.error };
+  }
+
+  const { currentUser, currentOrg } = adminGuard;
 
   try {
-    const nowIso = new Date().toISOString();
+    const now = new Date().toISOString();
     const stmt = db.prepare(`
       UPDATE devflow_projects
       SET is_archived = 1, archived_at = ?
       WHERE id = ? AND org_id = ?
     `);
-    stmt.run(nowIso, projectId, currentOrg.id);
+    stmt.run(now, projectId, currentOrg.id);
 
     logActivity(
       currentOrg.id,
       projectId,
       currentUser.name,
       "updated_project",
-      data.projectName,
-      "Project archived and moved to cold storage (read-only).",
+      "Project Archive",
+      "Placed project into read-only cold storage.",
     );
 
-    dispatchWebhookEvent(currentOrg.id, "project.archived", {
-      projectId,
-      name: data.projectName,
-      archivedByName: currentUser.name,
-    });
-
     revalidatePath("/devflow-saas/projects");
-    revalidatePath(`/devflow-saas/projects/${projectId}`);
-    revalidatePath("/devflow-saas/calendar");
-    revalidatePath("/devflow-saas/activity");
-    revalidatePath("/devflow-saas/analytics");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to archive project." };
@@ -238,13 +277,17 @@ export async function archiveProjectAction(
 export async function restoreProjectAction(
   projectId: string,
 ): Promise<ActionResponse> {
-  // 1. Enforce Tenant Scoping Guard
-  const guard = await requireDemoProjectAccess(projectId);
-  if (!guard.authorized) {
-    return { success: false, error: guard.error };
+  const adminGuard = await requireDemoAdmin();
+  if (!adminGuard.authorized) {
+    return { success: false, error: adminGuard.error };
   }
 
-  const { currentUser, currentOrg, data } = guard;
+  const tenantGuard = await requireDemoProjectAccess(projectId);
+  if (!tenantGuard.authorized) {
+    return { success: false, error: tenantGuard.error };
+  }
+
+  const { currentUser, currentOrg } = adminGuard;
 
   try {
     const stmt = db.prepare(`
@@ -259,15 +302,11 @@ export async function restoreProjectAction(
       projectId,
       currentUser.name,
       "updated_project",
-      data.projectName,
-      "Project restored from archive back to active workspace.",
+      "Project Restore",
+      "Restored project from archive to active status.",
     );
 
     revalidatePath("/devflow-saas/projects");
-    revalidatePath(`/devflow-saas/projects/${projectId}`);
-    revalidatePath("/devflow-saas/calendar");
-    revalidatePath("/devflow-saas/activity");
-    revalidatePath("/devflow-saas/analytics");
     return { success: true };
   } catch {
     return { success: false, error: "Failed to restore project." };
@@ -277,43 +316,37 @@ export async function restoreProjectAction(
 export async function deleteProjectAction(
   projectId: string,
 ): Promise<ActionResponse> {
-  // 1. Enforce Admin Role Check
   const adminGuard = await requireDemoAdmin();
   if (!adminGuard.authorized) {
     return { success: false, error: adminGuard.error };
   }
 
-  // 2. Enforce Tenant Scoping Guard
-  const projectGuard = await requireDemoProjectAccess(projectId);
-  if (!projectGuard.authorized) {
-    return { success: false, error: projectGuard.error };
+  const tenantGuard = await requireDemoProjectAccess(projectId);
+  if (!tenantGuard.authorized) {
+    return { success: false, error: tenantGuard.error };
   }
 
   const { currentUser, currentOrg } = adminGuard;
-  const { projectName } = projectGuard.data;
 
   try {
-    // 3. Strict Tenant-Scoped Deletion
-    const stmt = db.prepare(
-      "DELETE FROM devflow_projects WHERE id = ? AND org_id = ?",
-    );
+    const stmt = db.prepare(`
+      DELETE FROM devflow_projects
+      WHERE id = ? AND org_id = ?
+    `);
     stmt.run(projectId, currentOrg.id);
 
     logActivity(
       currentOrg.id,
-      projectId,
+      undefined,
       currentUser.name,
       "deleted_project",
-      projectName,
-      "Permanently deleted project and all associated tasks.",
+      "Project Deleted",
+      `Permanently removed project ID: ${projectId}.`,
     );
 
     revalidatePath("/devflow-saas/projects");
-    revalidatePath("/devflow-saas/calendar");
-    revalidatePath("/devflow-saas/activity");
-    revalidatePath("/devflow-saas/analytics");
     return { success: true };
   } catch {
-    return { success: false, error: "Failed to delete project from database." };
+    return { success: false, error: "Failed to delete project." };
   }
 }

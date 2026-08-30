@@ -155,6 +155,7 @@ export function ProjectTasksView({
   const [priority, setPriority] = useState<TaskPriority>("Medium");
   const [tag, setTag] = useState<string>(defaultTag);
   const [dueDate, setDueDate] = useState("");
+  const [estimatedHours, setEstimatedHours] = useState("");
   const [assigneeName, setAssigneeName] = useState(currentUser.name);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -291,6 +292,7 @@ export function ProjectTasksView({
     const trimmedTitle = title.trim();
     const trimmedDesc = description.trim();
     const trimmedAssignee = assigneeName.trim();
+    const estHoursNum = parseFloat(estimatedHours) || 0;
 
     if (!trimmedTitle || !trimmedDesc || !trimmedAssignee) {
       setFormError("All fields are required.");
@@ -305,6 +307,7 @@ export function ProjectTasksView({
     formData.append("priority", priority);
     formData.append("tag", tag);
     if (dueDate) formData.append("dueDate", dueDate);
+    if (estimatedHours) formData.append("estimatedHours", estimatedHours);
     formData.append("assigneeName", trimmedAssignee);
 
     // Optimistic UI update
@@ -317,6 +320,8 @@ export function ProjectTasksView({
       priority,
       tag,
       dueDate: dueDate || undefined,
+      estimatedHours: estHoursNum,
+      loggedHours: 0,
       assigneeName: trimmedAssignee,
     };
     setTasks((prev) => [optimisticTask, ...prev]);
@@ -333,6 +338,7 @@ export function ProjectTasksView({
         setPriority("Medium");
         setTag(defaultTag);
         setDueDate("");
+        setEstimatedHours("");
         setAssigneeName(currentUser.name);
         setIsFormOpen(false);
       }
@@ -354,6 +360,9 @@ export function ProjectTasksView({
     formData.append("priority", updatedTask.priority);
     formData.append("tag", updatedTask.tag);
     if (updatedTask.dueDate) formData.append("dueDate", updatedTask.dueDate);
+    if (updatedTask.estimatedHours !== undefined) {
+      formData.append("estimatedHours", updatedTask.estimatedHours.toString());
+    }
     formData.append("assigneeName", updatedTask.assigneeName);
 
     startTransition(async () => {
@@ -697,7 +706,7 @@ export function ProjectTasksView({
     }
   };
 
-  // Preset Counts
+  // Preset Counts & Project Time Rollup (Phase 66)
   const myTasksCount = tasks.filter(
     (t) => t.assigneeName === currentUser.name,
   ).length;
@@ -708,11 +717,25 @@ export function ProjectTasksView({
     (t) => t.status === "In Progress" || t.status === "Review",
   ).length;
 
+  const totalEstimatedHours = useMemo(
+    () => tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0),
+    [tasks],
+  );
+  const totalLoggedHours = useMemo(
+    () =>
+      Number(
+        tasks.reduce((sum, t) => sum + (t.loggedHours || 0), 0).toFixed(1),
+      ),
+    [tasks],
+  );
+  const isProjectOverBudget =
+    totalLoggedHours > totalEstimatedHours && totalEstimatedHours > 0;
+
   return (
     <section aria-labelledby="tasks-section-heading" className="space-y-6">
       {/* Top Header Bar */}
       <div className="flex flex-col gap-4 border-b border-slate-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h2
             id="tasks-section-heading"
             className="text-lg font-semibold text-white"
@@ -722,6 +745,23 @@ export function ProjectTasksView({
           <span className="text-xs text-slate-400">
             ({filteredTasks.length} of {tasks.length} tasks)
           </span>
+
+          {/* Project Effort Meter Pill (Phase 66) */}
+          <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/80 px-2.5 py-1 text-xs">
+            <span className="text-slate-400">⏱️ Effort:</span>
+            <span className="font-semibold text-white font-mono">
+              {totalLoggedHours}h
+            </span>
+            <span className="text-slate-500 font-mono">
+              /{" "}
+              {totalEstimatedHours > 0 ? `${totalEstimatedHours}h` : "No Est."}
+            </span>
+            {isProjectOverBudget && (
+              <span className="rounded bg-rose-500/20 px-1.5 py-0.2 text-[10px] font-bold text-rose-300 ring-1 ring-rose-500/40">
+                Over
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -1072,7 +1112,7 @@ export function ProjectTasksView({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <div>
                 <label
                   htmlFor="task-status-select"
@@ -1146,6 +1186,26 @@ export function ProjectTasksView({
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="task-est-hours-input"
+                  className="block text-xs font-medium text-slate-300"
+                >
+                  Est. Hours (h)
+                </label>
+                <input
+                  id="task-est-hours-input"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="500"
+                  value={estimatedHours}
+                  onChange={(e) => setEstimatedHours(e.target.value)}
+                  placeholder="e.g. 6"
                   className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
                 />
               </div>

@@ -643,6 +643,8 @@ export async function createTaskAction(
   const assigneeName = (formData.get("assigneeName") as string | null)?.trim();
   const tag = (formData.get("tag") as TaskTag | null) || "feature";
   const dueDate = (formData.get("dueDate") as string | null)?.trim() || null;
+  const estimatedHours =
+    parseFloat((formData.get("estimatedHours") as string | null) || "0") || 0;
 
   if (!projectId || !title || !description || !assigneeName) {
     return { success: false, error: "All fields are required." };
@@ -651,8 +653,8 @@ export async function createTaskAction(
   try {
     const id = `task-${Date.now()}`;
     const stmt = db.prepare(`
-      INSERT INTO devflow_tasks (id, project_id, milestone_id, title, description, status, priority, assignee_name, tag, due_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO devflow_tasks (id, project_id, milestone_id, title, description, status, priority, assignee_name, tag, due_date, estimated_hours)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -666,6 +668,7 @@ export async function createTaskAction(
       assigneeName,
       tag,
       dueDate,
+      estimatedHours,
     );
 
     const projectStmt = db.prepare(
@@ -684,7 +687,7 @@ export async function createTaskAction(
         title,
         `[${tag.toUpperCase()}] Assigned to ${assigneeName} (${priority} priority${
           dueDate ? `, due ${dueDate}` : ""
-        }).`,
+        }${estimatedHours > 0 ? `, ${estimatedHours}h est.` : ""}).`,
         id,
       );
 
@@ -714,6 +717,7 @@ export async function createTaskAction(
         priority,
         tag,
         assigneeName,
+        estimatedHours,
       });
     }
 
@@ -743,6 +747,8 @@ export async function updateTaskAction(
   const assigneeName = (formData.get("assigneeName") as string | null)?.trim();
   const tag = (formData.get("tag") as TaskTag | null) || "feature";
   const dueDate = (formData.get("dueDate") as string | null)?.trim() || null;
+  const estimatedHours =
+    parseFloat((formData.get("estimatedHours") as string | null) || "0") || 0;
 
   if (!taskId || !projectId || !title || !description || !assigneeName) {
     return { success: false, error: "All fields are required." };
@@ -751,7 +757,7 @@ export async function updateTaskAction(
   try {
     const stmt = db.prepare(`
       UPDATE devflow_tasks
-      SET title = ?, description = ?, status = ?, priority = ?, assignee_name = ?, tag = ?, due_date = ?, milestone_id = ?
+      SET title = ?, description = ?, status = ?, priority = ?, assignee_name = ?, tag = ?, due_date = ?, milestone_id = ?, estimated_hours = ?
       WHERE id = ?
     `);
 
@@ -764,6 +770,7 @@ export async function updateTaskAction(
       tag,
       dueDate,
       milestoneId,
+      estimatedHours,
       taskId,
     );
 
@@ -783,7 +790,7 @@ export async function updateTaskAction(
         title,
         `[${tag.toUpperCase()}] Updated: ${status}, ${priority} priority, assigned to ${assigneeName}${
           dueDate ? `, due ${dueDate}` : ""
-        }.`,
+        }${estimatedHours > 0 ? `, ${estimatedHours}h est.` : ""}.`,
         taskId,
       );
     }
@@ -1769,5 +1776,119 @@ export async function deleteSavedViewAction(
     return { success: true };
   } catch {
     return { success: false, error: "Failed to delete saved view." };
+  }
+}
+
+// ==========================================
+// TIME TRACKING OPERATIONS (Phase 66)
+// ==========================================
+
+export async function logTaskTimeAction(
+  formData: FormData,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  const taskId = (formData.get("taskId") as string | null)?.trim();
+  const projectId = (formData.get("projectId") as string | null)?.trim();
+  const hoursRaw = (formData.get("hours") as string | null)?.trim();
+  const description = (formData.get("description") as string | null)?.trim();
+
+  const hours = parseFloat(hoursRaw || "0");
+
+  if (!taskId || !projectId || isNaN(hours) || hours <= 0) {
+    return {
+      success: false,
+      error: "Valid work hours (greater than 0) are required.",
+    };
+  }
+
+  try {
+    const id = `time-${Date.now()}`;
+    const stmt = db.prepare(`
+      INSERT INTO devflow_time_logs (id, task_id, user_id, user_name, hours, description)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      taskId,
+      currentUser.id,
+      currentUser.name,
+      hours,
+      description || null,
+    );
+
+    const taskStmt = db.prepare("SELECT title FROM devflow_tasks WHERE id = ?");
+    const task = taskStmt.get(taskId) as { title: string } | undefined;
+
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    if (project && task) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "updated_task",
+        task.title,
+        `Logged ${hours}h of work${description ? `: "${description}"` : "."}`,
+        taskId,
+      );
+    }
+
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/analytics");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to log time entry in database." };
+  }
+}
+
+export async function deleteTimeLogAction(
+  timeLogId: string,
+  projectId: string,
+): Promise<ActionResponse> {
+  const currentUser = await getCurrentUser();
+  try {
+    const logStmt = db.prepare(`
+      SELECT l.hours, t.title, t.id as task_id
+      FROM devflow_time_logs l
+      JOIN devflow_tasks t ON t.id = l.task_id
+      WHERE l.id = ?
+    `);
+    const log = logStmt.get(timeLogId) as
+      | { hours: number; title: string; task_id: string }
+      | undefined;
+
+    const stmt = db.prepare("DELETE FROM devflow_time_logs WHERE id = ?");
+    stmt.run(timeLogId);
+
+    const projectStmt = db.prepare(
+      "SELECT org_id FROM devflow_projects WHERE id = ?",
+    );
+    const project = projectStmt.get(projectId) as
+      | { org_id: string }
+      | undefined;
+
+    if (project && log) {
+      logActivity(
+        project.org_id,
+        projectId,
+        currentUser.name,
+        "updated_task",
+        log.title,
+        `Removed ${log.hours}h time log entry.`,
+        log.task_id,
+      );
+    }
+
+    revalidatePath(`/devflow-saas/projects/${projectId}`);
+    revalidatePath("/devflow-saas/analytics");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to delete time log entry." };
   }
 }

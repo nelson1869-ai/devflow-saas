@@ -73,6 +73,7 @@ try {
       assignee_name TEXT NOT NULL,
       tag TEXT NOT NULL DEFAULT 'feature',
       due_date TEXT,
+      estimated_hours REAL NOT NULL DEFAULT 0,
       FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE,
       FOREIGN KEY (milestone_id) REFERENCES devflow_milestones(id) ON DELETE SET NULL
     );
@@ -168,6 +169,18 @@ try {
       FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE,
       FOREIGN KEY (project_id) REFERENCES devflow_projects(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS devflow_time_logs (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      user_name TEXT NOT NULL,
+      hours REAL NOT NULL,
+      description TEXT,
+      logged_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (task_id) REFERENCES devflow_tasks(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE
+    );
   `);
 
   // Runtime self-healing column migrations
@@ -184,6 +197,11 @@ try {
   } catch {}
   try {
     db.exec(`ALTER TABLE devflow_tasks ADD COLUMN milestone_id TEXT;`);
+  } catch {}
+  try {
+    db.exec(
+      `ALTER TABLE devflow_tasks ADD COLUMN estimated_hours REAL NOT NULL DEFAULT 0;`,
+    );
   } catch {}
 } catch (e) {
   console.error("Database self-healing migration warning:", e);

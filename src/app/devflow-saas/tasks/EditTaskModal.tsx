@@ -8,6 +8,7 @@ import type { WorkspaceTag } from "../lib/tags";
 import { MarkdownView } from "../components/MarkdownView";
 import { MentionAutocompleteInput } from "../components/MentionAutocompleteInput";
 import { MentionText } from "../components/MentionText";
+import { TimeTrackingSection } from "./TimeTrackingSection";
 
 type EditTaskModalProps = Readonly<{
   task: Task;
@@ -56,6 +57,9 @@ export function EditTaskModal({
   const [tag, setTag] = useState<string>(task.tag);
   const [assigneeName, setAssigneeName] = useState(task.assigneeName);
   const [dueDate, setDueDate] = useState(task.dueDate || "");
+  const [estimatedHours, setEstimatedHours] = useState(
+    task.estimatedHours || 0,
+  );
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [selectedBlockerId, setSelectedBlockerId] = useState("");
   const [newComment, setNewComment] = useState("");
@@ -71,6 +75,7 @@ export function EditTaskModal({
     setTag(task.tag);
     setAssigneeName(task.assigneeName);
     setDueDate(task.dueDate || "");
+    setEstimatedHours(task.estimatedHours || 0);
     setErrorMessage(null);
   }
 
@@ -113,6 +118,7 @@ export function EditTaskModal({
       tag,
       assigneeName,
       dueDate: dueDate || undefined,
+      estimatedHours: estimatedHours || 0,
     });
   };
 
@@ -238,7 +244,7 @@ export function EditTaskModal({
             )}
           </div>
 
-          {/* Metadata Grid (Status, Priority, Assignee, Tag, Due Date) */}
+          {/* Metadata Grid (Status, Priority, Assignee, Tag, Due Date, Est Hours) */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label
@@ -334,6 +340,28 @@ export function EditTaskModal({
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="edit-task-est-hours"
+                className="block text-xs font-medium text-slate-300"
+              >
+                Est. Hours (h)
+              </label>
+              <input
+                id="edit-task-est-hours"
+                type="number"
+                step="0.5"
+                min="0"
+                max="500"
+                value={estimatedHours || ""}
+                onChange={(e) =>
+                  setEstimatedHours(parseFloat(e.target.value) || 0)
+                }
+                placeholder="e.g. 8"
                 className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-mono text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
               />
             </div>
@@ -437,6 +465,15 @@ export function EditTaskModal({
             </button>
           </div>
         </form>
+
+        {/* Time Tracking & Logged Effort Section (Phase 66) */}
+        <div className="border-t border-slate-800 pt-6">
+          <TimeTrackingSection
+            task={task}
+            projectId={task.projectId}
+            currentUser={currentUser}
+          />
+        </div>
 
         {/* Discussion Notes Section with @Mention Support (Phase 65) */}
         <div className="border-t border-slate-800 pt-6 space-y-4">

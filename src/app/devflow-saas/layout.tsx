@@ -9,11 +9,13 @@ import {
   type ThemeAccent,
 } from "./lib/auth";
 import { getProjectsByOrgId } from "./lib/queries";
+import { getNotificationsForUser } from "./lib/notifications";
 import { UserMenu } from "./components/UserMenu";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
 import { CommandPalette } from "./components/CommandPalette";
 import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { ThemeAccentPicker } from "./components/ThemeAccentPicker";
+import { NotificationBell } from "./components/NotificationBell";
 
 type DevFlowLayoutProps = Readonly<{
   children: ReactNode;
@@ -41,7 +43,11 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
       getThemeAccent(),
     ]);
 
-  const projects = getProjectsByOrgId(currentOrg.id);
+  const [projects, notifications] = await Promise.all([
+    getProjectsByOrgId(currentOrg.id),
+    getNotificationsForUser(currentUser.id, currentOrg.id),
+  ]);
+
   const palette = accentPalettes[currentAccent] || accentPalettes.cyan;
 
   return (
@@ -150,6 +156,9 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
 
             {/* Keyboard Shortcuts Helper (?) */}
             <KeyboardShortcutsModal />
+
+            {/* Notification Bell Drawer (🔔) */}
+            <NotificationBell notifications={notifications} />
 
             {/* User Theme Accent Color Picker */}
             <ThemeAccentPicker currentAccent={currentAccent} />

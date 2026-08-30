@@ -2,18 +2,11 @@ import Link from "next/link";
 import { getProjectById, getTasksByProjectId } from "../../lib/queries";
 import { getCurrentUser, getAllUsers } from "../../lib/auth";
 import { getCommentsByProjectId } from "../../lib/comments";
-import type { ProjectStatus } from "../types";
-import { ProjectTasksView } from "./ProjectTasksView";
+import { ProjectDetailClient } from "./ProjectDetailClient";
 
 type ProjectDetailPageProps = Readonly<{
   params: Promise<{ id: string }>;
 }>;
-
-const statusStyles: Readonly<Record<ProjectStatus, string>> = {
-  Active: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-  Planning: "border-amber-500/30 bg-amber-500/10 text-amber-400",
-  Completed: "border-slate-500/30 bg-slate-500/10 text-slate-400",
-};
 
 export default async function ProjectDetailPage({
   params,
@@ -54,7 +47,7 @@ export default async function ProjectDetailPage({
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10 text-slate-100 sm:px-8">
-      <div className="space-y-8">
+      <div className="space-y-6">
         <nav aria-label="Breadcrumb">
           <Link
             href="/devflow-saas/projects"
@@ -64,33 +57,9 @@ export default async function ProjectDetailPage({
           </Link>
         </nav>
 
-        <header className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 sm:p-8">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
-              Key: {project.key}
-            </span>
-            <span
-              className={[
-                "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium",
-                statusStyles[project.status],
-              ].join(" ")}
-            >
-              {project.status}
-            </span>
-          </div>
-
-          <h1 className="mt-4 text-3xl font-bold text-white sm:text-4xl">
-            {project.name}
-          </h1>
-
-          <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:text-base">
-            {project.description}
-          </p>
-        </header>
-
-        {/* Real SQLite Tasks with Comments and Session User */}
-        <ProjectTasksView
-          projectId={project.id}
+        {/* Client Interactive Tabbed Project View */}
+        <ProjectDetailClient
+          project={project}
           initialTasks={projectTasks}
           initialComments={projectComments}
           currentUser={currentUser}

@@ -34,6 +34,7 @@ export function EditTaskModal({
   const [status, setStatus] = useState<TaskStatus>(task.status);
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const [tag, setTag] = useState<TaskTag>(task.tag);
+  const [dueDate, setDueDate] = useState(task.dueDate || "");
   const [assigneeName, setAssigneeName] = useState(task.assigneeName);
   const [newComment, setNewComment] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +75,7 @@ export function EditTaskModal({
       priority,
       assigneeName,
       tag,
+      dueDate: dueDate.trim() || undefined,
     });
   };
 
@@ -162,7 +164,7 @@ export function EditTaskModal({
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label
                 htmlFor="edit-task-status"
@@ -204,7 +206,9 @@ export function EditTaskModal({
                 <option value="Urgent">Urgent</option>
               </select>
             </div>
+          </div>
 
+          <div className="grid gap-4 sm:grid-cols-3">
             <div>
               <label
                 htmlFor="edit-task-tag"
@@ -226,6 +230,23 @@ export function EditTaskModal({
                 <option value="security">security</option>
                 <option value="infra">infra</option>
               </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="edit-task-due"
+                className="block text-xs font-medium text-slate-300"
+              >
+                Due Date
+              </label>
+              <input
+                id="edit-task-due"
+                type="date"
+                disabled={isPending}
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs font-mono text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+              />
             </div>
 
             <div>

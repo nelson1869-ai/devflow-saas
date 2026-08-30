@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import type {
   Task,
   TaskPriority,
@@ -31,6 +31,7 @@ type TaskFilter = "All" | TaskStatus;
 type ViewMode = "kanban" | "grid";
 type PriorityFilter = "All" | TaskPriority;
 type TagFilter = "All" | TaskTag;
+type SortOption = "default" | "dueSoonest" | "priorityHighest";
 
 const taskFilterOptions: readonly TaskFilter[] = [
   "All",
@@ -81,6 +82,13 @@ const kanbanColumns: readonly {
   },
 ];
 
+const priorityRank: Record<TaskPriority, number> = {
+  Urgent: 4,
+  High: 3,
+  Medium: 2,
+  Low: 1,
+};
+
 export function ProjectTasksView({
   projectId,
   initialTasks,
@@ -97,13 +105,14 @@ export function ProjectTasksView({
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  // Filter States
+  // Filter & Sort States
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<TaskFilter>("All");
   const [selectedAssignee, setSelectedAssignee] = useState<string>("All");
   const [selectedPriority, setSelectedPriority] =
     useState<PriorityFilter>("All");
   const [selectedTag, setSelectedTag] = useState<TagFilter>("All");
+  const [sortBy, setSortBy] = useState<SortOption>("default");
   const [onlyMyTasks, setOnlyMyTasks] = useState(false);
 
   // Form State
@@ -112,6 +121,7 @@ export function ProjectTasksView({
   const [status, setStatus] = useState<TaskStatus>("Todo");
   const [priority, setPriority] = useState<TaskPriority>("Medium");
   const [tag, setTag] = useState<TaskTag>("feature");
+  const [dueDate, setDueDate] = useState("");
   const [assigneeName, setAssigneeName] = useState(currentUser.name);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -152,6 +162,7 @@ export function ProjectTasksView({
     formData.append("status", status);
     formData.append("priority", priority);
     formData.append("tag", tag);
+    if (dueDate) formData.append("dueDate", dueDate);
     formData.append("assigneeName", trimmedAssignee);
 
     // Optimistic UI update
@@ -163,6 +174,7 @@ export function ProjectTasksView({
       status,
       priority,
       tag,
+      dueDate: dueDate || undefined,
       assigneeName: trimmedAssignee,
     };
     setTasks((prev) => [optimisticTask, ...prev]);
@@ -178,6 +190,7 @@ export function ProjectTasksView({
         setStatus("Todo");
         setPriority("Medium");
         setTag("feature");
+        setDueDate("");
         setAssigneeName(currentUser.name);
         setIsFormOpen(false);
       }
@@ -199,6 +212,7 @@ export function ProjectTasksView({
     formData.append("status", updatedTask.status);
     formData.append("priority", updatedTask.priority);
     formData.append("tag", updatedTask.tag);
+    if (updatedTask.dueDate) formData.append("dueDate", updatedTask.dueDate);
     formData.append("assigneeName", updatedTask.assigneeName);
 
     startTransition(async () => {
@@ -275,6 +289,7 @@ export function ProjectTasksView({
     setSelectedAssignee("All");
     setSelectedPriority("All");
     setSelectedTag("All");
+    setSortBy("default");
     setOnlyMyTasks(false);
   };
 
@@ -284,40 +299,70 @@ export function ProjectTasksView({
     selectedAssignee !== "All" ||
     selectedPriority !== "All" ||
     selectedTag !== "All" ||
+    sortBy !== "default" ||
     onlyMyTasks;
 
-  // Compound Filter Predicate
-  const filteredTasks = tasks.filter((task) => {
-    const matchesStatus =
-      viewMode === "kanban" ||
-      selectedStatus === "All" ||
-      task.status === selectedStatus;
+  // Compound Filter & Sort Predicate
+  const filteredTasks = useMemo(() => {
+    const filtered = tasks.filter((task) => {
+      const matchesStatus =
+        viewMode === "kanban" ||
+        selectedStatus === "All" ||
+        task.status === selectedStatus;
 
-    const matchesAssignee = onlyMyTasks
-      ? task.assigneeName === currentUser.name
-      : selectedAssignee === "All" || task.assigneeName === selectedAssignee;
+      const matchesAssignee = onlyMyTasks
+        ? task.assigneeName === currentUser.name
+        : selectedAssignee === "All" || task.assigneeName === selectedAssignee;
 
-    const matchesPriority =
-      selectedPriority === "All" || task.priority === selectedPriority;
+      const matchesPriority =
+        selectedPriority === "All" || task.priority === selectedPriority;
 
-    const matchesTag = selectedTag === "All" || task.tag === selectedTag;
+      const matchesTag = selectedTag === "All" || task.tag === selectedTag;
 
-    const query = searchQuery.trim().toLowerCase();
-    const matchesSearch =
-      query === "" ||
-      task.title.toLowerCase().includes(query) ||
-      task.description.toLowerCase().includes(query) ||
-      task.tag.toLowerCase().includes(query) ||
-      task.assigneeName.toLowerCase().includes(query);
+      const query = searchQuery.trim().toLowerCase();
+      const matchesSearch =
+        query === "" ||
+        task.title.toLowerCase().includes(query) ||
+        task.description.toLowerCase().includes(query) ||
+        task.tag.toLowerCase().includes(query) ||
+        task.assigneeName.toLowerCase().includes(query);
 
-    return (
-      matchesStatus &&
-      matchesAssignee &&
-      matchesPriority &&
-      matchesTag &&
-      matchesSearch
-    );
-  });
+      return (
+        matchesStatus &&
+        matchesAssignee &&
+        matchesPriority &&
+        matchesTag &&
+        matchesSearch
+      );
+    });
+
+    if (sortBy === "dueSoonest") {
+      return [...filtered].sort((a, b) => {
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return a.dueDate.localeCompare(b.dueDate);
+      });
+    }
+
+    if (sortBy === "priorityHighest") {
+      return [...filtered].sort(
+        (a, b) => priorityRank[b.priority] - priorityRank[a.priority],
+      );
+    }
+
+    return filtered;
+  }, [
+    tasks,
+    viewMode,
+    selectedStatus,
+    selectedAssignee,
+    selectedPriority,
+    selectedTag,
+    searchQuery,
+    onlyMyTasks,
+    currentUser.name,
+    sortBy,
+  ]);
 
   return (
     <section aria-labelledby="tasks-section-heading" className="space-y-6">
@@ -383,7 +428,7 @@ export function ProjectTasksView({
         </div>
       </div>
 
-      {/* Advanced Filter Toolbar */}
+      {/* Advanced Filter & Sort Toolbar */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
         <div className="relative min-w-45 flex-1 sm:max-w-xs">
           <input
@@ -454,6 +499,18 @@ export function ProjectTasksView({
           ))}
         </select>
 
+        {/* Smart Sorting Dropdown */}
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as SortOption)}
+          aria-label="Sort tasks"
+          className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-300 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+        >
+          <option value="default">Default Order</option>
+          <option value="dueSoonest">📅 Due Soonest</option>
+          <option value="priorityHighest">⚡ Priority Highest</option>
+        </select>
+
         {viewMode === "grid" && (
           <div
             role="tablist"
@@ -494,7 +551,7 @@ export function ProjectTasksView({
         )}
       </div>
 
-      {/* Task Creation Form */}
+      {/* Task Creation Form with Due Date */}
       {isFormOpen && (
         <div className="rounded-2xl border border-cyan-500/30 bg-slate-900/90 p-6 shadow-xl">
           <h3 className="text-base font-semibold text-white">
@@ -549,7 +606,7 @@ export function ProjectTasksView({
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label
                   htmlFor="task-status"
@@ -591,7 +648,9 @@ export function ProjectTasksView({
                   <option value="Urgent">Urgent</option>
                 </select>
               </div>
+            </div>
 
+            <div className="grid gap-4 sm:grid-cols-3">
               <div>
                 <label
                   htmlFor="task-tag"
@@ -613,6 +672,23 @@ export function ProjectTasksView({
                   <option value="security">security</option>
                   <option value="infra">infra</option>
                 </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="task-due"
+                  className="block text-xs font-medium text-slate-300"
+                >
+                  Due Date (Optional)
+                </label>
+                <input
+                  id="task-due"
+                  type="date"
+                  disabled={isPending}
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs font-mono text-slate-100 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                />
               </div>
 
               <div>
@@ -772,7 +848,7 @@ export function ProjectTasksView({
         </ul>
       )}
 
-      {/* Edit Task Modal with Discussion Thread */}
+      {/* Edit Task Modal with Due Date and Discussion */}
       {editingTask && (
         <EditTaskModal
           key={editingTask.id}

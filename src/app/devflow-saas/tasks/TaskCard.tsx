@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Task, TaskPriority, TaskStatus, TaskTag } from "./types";
+import { getDueDateMeta } from "../lib/dates";
 
 type TaskCardProps = Readonly<{
   task: Task;
@@ -42,6 +43,7 @@ export function TaskCard({
   isDraggable = true,
 }: TaskCardProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const dueMeta = getDueDateMeta(task.dueDate, task.status === "Done");
 
   const handleDragStart = (e: React.DragEvent<HTMLLIElement>) => {
     e.dataTransfer.setData("text/plain", task.id);
@@ -195,9 +197,24 @@ export function TaskCard({
         {task.description}
       </p>
 
+      {/* Footer: Assignee & Due Date */}
       <div className="mt-3.5 flex items-center justify-between border-t border-slate-800/80 pt-2.5 text-xs text-slate-400">
-        <span>Assignee:</span>
-        <span className="font-medium text-slate-200">{task.assigneeName}</span>
+        <div className="flex items-center gap-1.5">
+          <span>Assignee:</span>
+          <span className="font-medium text-slate-200">
+            {task.assigneeName}
+          </span>
+        </div>
+
+        {task.dueDate && (
+          <span
+            className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-mono ${dueMeta.badgeStyle}`}
+            title={`Target deadline: ${task.dueDate}`}
+          >
+            <span>📅</span>
+            <span>{dueMeta.label}</span>
+          </span>
+        )}
       </div>
     </li>
   );

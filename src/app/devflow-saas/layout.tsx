@@ -149,10 +149,22 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
                 Analytics
               </Link>
               <Link
+                href="/devflow-saas/settings/automations"
+                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+              >
+                Automations
+              </Link>
+              <Link
                 href="/devflow-saas/integrations"
                 className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
               >
                 Webhooks
+              </Link>
+              <Link
+                href="/devflow-saas/settings/api-keys"
+                className="text-xs font-medium text-slate-300 transition hover:text-white focus-visible:outline-2 focus-visible:outline-cyan-400"
+              >
+                API Keys
               </Link>
               <Link
                 href="/devflow-saas/settings/export"

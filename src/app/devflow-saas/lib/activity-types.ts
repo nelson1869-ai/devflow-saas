@@ -7,7 +7,11 @@ export type ActivityAction =
   | "updated_task_status"
   | "deleted_task"
   | "updated_user"
-  | "invited_user";
+  | "invited_user"
+  | "created_api_key"
+  | "revoked_api_key"
+  | "activated_api_key"
+  | "deleted_api_key";
 
 export type ActivityItem = Readonly<{
   id: string;

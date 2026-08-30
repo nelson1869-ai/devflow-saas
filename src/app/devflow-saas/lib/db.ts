@@ -252,6 +252,22 @@ try {
       merged_at TEXT,
       FOREIGN KEY (task_id) REFERENCES devflow_tasks(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS devflow_api_keys (
+      id TEXT PRIMARY KEY,
+      org_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      key_prefix TEXT NOT NULL,
+      key_hash TEXT NOT NULL UNIQUE,
+      scopes TEXT NOT NULL DEFAULT 'read:tasks,write:tasks,read:projects',
+      last_used_at TEXT,
+      expires_at TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE
+    );
   `);
 
   // Runtime self-healing column migrations

@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -301,6 +302,25 @@ db.exec(`
   );
 `);
 
+// 20. Workspace API Keys & Developer Tokens (Phase 80)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS devflow_api_keys (
+    id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    key_prefix TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    scopes TEXT NOT NULL DEFAULT 'read:tasks,write:tasks,read:projects',
+    last_used_at TEXT,
+    expires_at TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (org_id) REFERENCES devflow_organizations(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES devflow_users(id) ON DELETE CASCADE
+  );
+`);
+
 // Seed Initial Data
 const orgCount = db
   .prepare("SELECT count(*) as count FROM devflow_organizations")
@@ -370,7 +390,7 @@ if (projectCount === 0) {
     "proj-1",
     "Implement OAuth2 provider integration",
     "Connect GitHub and Google OAuth providers with PKCE flow.",
-    "In Progress",
+    "Done",
     "High",
     "Alex Rivera",
     "security",
@@ -453,21 +473,21 @@ if (projectCount === 0) {
     "sub-3",
     "task-1",
     "Add user session cookie encryption",
-    0,
+    1,
     2,
   );
   insertSubtask.run(
     "sub-4",
     "task-1",
     "Write integration tests for token refresh",
-    0,
+    1,
     3,
   );
 
   // Seed Initial Pull Request for Task 1
   const insertPR = db.prepare(`
-    INSERT INTO devflow_task_prs (id, task_id, pr_number, pr_title, pr_url, repository, branch_name, status, author_name, additions, deletions)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO devflow_task_prs (id, task_id, pr_number, pr_title, pr_url, repository, branch_name, status, author_name, additions, deletions, merged_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'merged', ?, ?, ?, datetime('now'))
   `);
   insertPR.run(
     "pr-1",
@@ -477,62 +497,34 @@ if (projectCount === 0) {
     "https://github.com/acme/cloud-api/pull/42",
     "acme/cloud-api",
     "feat/PLAT-1-oauth-pkce",
-    "open",
     "Alex Rivera",
     184,
     32,
   );
 }
 
-const tagCount = db
-  .prepare("SELECT count(*) as count FROM devflow_tags")
+const keyCount = db
+  .prepare("SELECT count(*) as count FROM devflow_api_keys")
   .get().count;
-if (tagCount === 0) {
-  console.log("Seeding Initial Tags...");
-  const insertTag = db.prepare(
-    "INSERT INTO devflow_tags (id, org_id, name, color, description) VALUES (?, ?, ?, ?, ?)",
-  );
-  insertTag.run(
-    "tag-1",
+if (keyCount === 0) {
+  console.log("Seeding Initial Developer API Key...");
+  const sampleRawKey = "df_live_sample_token_8892fbc1";
+  const sampleHash = crypto
+    .createHash("sha256")
+    .update(sampleRawKey)
+    .digest("hex");
+  const insertKey = db.prepare(`
+    INSERT INTO devflow_api_keys (id, org_id, user_id, name, key_prefix, key_hash, scopes, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+  `);
+  insertKey.run(
+    "key-1",
     "org-1",
-    "frontend",
-    "purple",
-    "Client UI, Next.js components and Tailwind styling.",
-  );
-  insertTag.run(
-    "tag-2",
-    "org-1",
-    "backend",
-    "cyan",
-    "API routes, SQLite migrations, and Server Actions.",
-  );
-  insertTag.run(
-    "tag-3",
-    "org-1",
-    "security",
-    "emerald",
-    "Auth, RBAC authorization, and data encryption.",
-  );
-  insertTag.run(
-    "tag-4",
-    "org-1",
-    "infra",
-    "amber",
-    "Deployment pipelines, Docker containers, and edge cache.",
-  );
-  insertTag.run(
-    "tag-5",
-    "org-1",
-    "bug",
-    "rose",
-    "Critical defect resolution and performance regressions.",
-  );
-  insertTag.run(
-    "tag-6",
-    "org-1",
-    "feature",
-    "sky",
-    "New feature initiative and product capability.",
+    "usr-1",
+    "GitHub Actions CI Pipeline",
+    "df_live_samp...",
+    sampleHash,
+    "read:tasks,write:tasks,read:projects",
   );
 }
 

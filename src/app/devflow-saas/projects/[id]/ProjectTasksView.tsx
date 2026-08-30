@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import type { Task, TaskPriority, TaskStatus } from "../../tasks/types";
+import type {
+  Task,
+  TaskPriority,
+  TaskStatus,
+  TaskDependency,
+} from "../../tasks/types";
 import type { User } from "../../lib/auth";
 import type { TaskComment } from "../../lib/comments";
 import type { WorkspaceTag } from "../../lib/tags";
@@ -15,6 +20,8 @@ import {
   updateTaskStatusAction,
   deleteTaskAction,
   createCommentAction,
+  addTaskDependencyAction,
+  removeTaskDependencyAction,
 } from "../../lib/actions";
 
 type ProjectTasksViewProps = Readonly<{
@@ -87,11 +94,19 @@ export function ProjectTasksView({
   currentUser,
   allUsers,
 }: ProjectTasksViewProps) {
+  const [prevInitialTasks, setPrevInitialTasks] = useState(initialTasks);
   const [tasks, setTasks] = useState<readonly Task[]>(initialTasks);
+
+  const [prevInitialComments, setPrevInitialComments] =
+    useState(initialComments);
   const [comments, setComments] =
     useState<readonly TaskComment[]>(initialComments);
+
+  const [prevInitialActivities, setPrevInitialActivities] =
+    useState(initialActivities);
   const [activities, setActivities] =
     useState<readonly ActivityItem[]>(initialActivities);
+
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -120,28 +135,19 @@ export function ProjectTasksView({
   const [assigneeName, setAssigneeName] = useState(currentUser.name);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Synchronize state when server revalidates
-  if (
-    initialTasks !== tasks &&
-    !isPending &&
-    initialTasks.length > tasks.length
-  ) {
+  // React 19 Render-time state synchronizations (zero effect cascades)
+  if (initialTasks !== prevInitialTasks) {
+    setPrevInitialTasks(initialTasks);
     setTasks(initialTasks);
   }
 
-  if (
-    initialComments !== comments &&
-    !isPending &&
-    initialComments.length > comments.length
-  ) {
+  if (initialComments !== prevInitialComments) {
+    setPrevInitialComments(initialComments);
     setComments(initialComments);
   }
 
-  if (
-    initialActivities !== activities &&
-    !isPending &&
-    initialActivities.length > activities.length
-  ) {
+  if (initialActivities !== prevInitialActivities) {
+    setPrevInitialActivities(initialActivities);
     setActivities(initialActivities);
   }
 
@@ -205,7 +211,6 @@ export function ProjectTasksView({
   };
 
   const handleSaveTask = (updatedTask: Task) => {
-    // Optimistic UI update
     setTasks((prev) =>
       prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)),
     );
@@ -268,11 +273,97 @@ export function ProjectTasksView({
     });
   };
 
-  const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
+  const handleAddDependency = (taskId: string, dependsOnTaskId: string) => {
+    const blockerTask = tasks.find((t) => t.id === dependsOnTaskId);
+    const optimisticDep: TaskDependency = {
+      id: `dep-${Date.now()}`,
+      taskId,
+      dependsOnTaskId,
+      dependsOnTaskTitle: blockerTask?.title || "Task",
+      dependsOnTaskStatus: blockerTask?.status || "Todo",
+    };
+
+    // Optimistic UI update across tasks & editingTask
     setTasks((prev) =>
-      prev.map((task) =>
-        task.id === taskId ? { ...task, status: newStatus } : task,
-      ),
+      prev.map((t) => {
+        if (t.id === taskId) {
+          const existing = t.blockedBy || [];
+          return { ...t, blockedBy: [...existing, optimisticDep] };
+        }
+        return t;
+      }),
+    );
+
+    setEditingTask((prev) => {
+      if (prev && prev.id === taskId) {
+        const existing = prev.blockedBy || [];
+        return { ...prev, blockedBy: [...existing, optimisticDep] };
+      }
+      return prev;
+    });
+
+    startTransition(async () => {
+      const res = await addTaskDependencyAction(
+        taskId,
+        dependsOnTaskId,
+        projectId,
+      );
+      if (!res.success) {
+        alert(res.error || "Failed to add dependency.");
+        setTasks(initialTasks);
+      }
+    });
+  };
+
+  const handleRemoveDependency = (dependencyId: string) => {
+    // Optimistic UI update across tasks & editingTask
+    setTasks((prev) =>
+      prev.map((t) => ({
+        ...t,
+        blockedBy: (t.blockedBy || []).filter((d) => d.id !== dependencyId),
+      })),
+    );
+
+    setEditingTask((prev) => {
+      if (prev) {
+        return {
+          ...prev,
+          blockedBy: (prev.blockedBy || []).filter(
+            (d) => d.id !== dependencyId,
+          ),
+        };
+      }
+      return prev;
+    });
+
+    startTransition(async () => {
+      const res = await removeTaskDependencyAction(dependencyId, projectId);
+      if (!res.success) {
+        alert(res.error || "Failed to remove dependency.");
+        setTasks(initialTasks);
+      }
+    });
+  };
+
+  const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
+    // Optimistic UI update: update this task AND update blocker status in all dependent tasks
+    setTasks((prev) =>
+      prev.map((task) => {
+        if (task.id === taskId) {
+          return { ...task, status: newStatus };
+        }
+        if (task.blockedBy && task.blockedBy.length > 0) {
+          return {
+            ...task,
+            blockedBy: task.blockedBy.map((d) =>
+              d.dependsOnTaskId === taskId
+                ? { ...d, dependsOnTaskStatus: newStatus }
+                : d,
+            ),
+          };
+        }
+        return task;
+      }),
     );
 
     startTransition(async () => {
@@ -871,11 +962,12 @@ export function ProjectTasksView({
         </ul>
       )}
 
-      {/* Edit Task Modal with Dynamic Workspace Tags */}
+      {/* Edit Task Modal with Dependencies & Blocker Linking */}
       {editingTask && (
         <EditTaskModal
           key={editingTask.id}
           task={editingTask}
+          allProjectTasks={tasks}
           allUsers={allUsers}
           workspaceTags={workspaceTags}
           currentUser={currentUser}
@@ -884,6 +976,8 @@ export function ProjectTasksView({
           onClose={() => setEditingTask(null)}
           onSave={handleSaveTask}
           onAddComment={(content) => handleAddComment(content, editingTask.id)}
+          onAddDependency={handleAddDependency}
+          onRemoveDependency={handleRemoveDependency}
           isPending={isPending}
         />
       )}

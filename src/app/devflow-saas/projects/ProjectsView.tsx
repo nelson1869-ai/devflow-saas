@@ -32,6 +32,8 @@ export function ProjectsView({
   currentUser,
   currentOrg,
 }: ProjectsViewProps) {
+  const [prevInitialProjects, setPrevInitialProjects] =
+    useState(initialProjects);
   const [projects, setProjects] = useState<readonly Project[]>(initialProjects);
   const [selectedFilter, setSelectedFilter] = useState<FilterOption>("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -51,8 +53,9 @@ export function ProjectsView({
   const [status, setStatus] = useState<ProjectStatus>("Active");
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Sync state when server revalidates
-  if (initialProjects !== projects && !isPending) {
+  // React 19 Render-time state synchronization
+  if (initialProjects !== prevInitialProjects) {
+    setPrevInitialProjects(initialProjects);
     setProjects(initialProjects);
   }
 
@@ -437,7 +440,7 @@ export function ProjectsView({
           </section>
         )}
 
-        {/* KPI Performance Metrics (Only for active projects) */}
+        {/* KPI Performance Metrics */}
         <ProjectMetrics projects={projects.filter((p) => !p.isArchived)} />
 
         {/* Search & Filter Toolbar */}

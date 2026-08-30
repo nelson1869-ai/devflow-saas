@@ -273,6 +273,11 @@ try {
   // Runtime self-healing column migrations
   try {
     db.exec(
+      `ALTER TABLE devflow_organizations ADD COLUMN plan TEXT NOT NULL DEFAULT 'Free';`,
+    );
+  } catch {}
+  try {
+    db.exec(
       `ALTER TABLE devflow_projects ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0;`,
     );
   } catch {}

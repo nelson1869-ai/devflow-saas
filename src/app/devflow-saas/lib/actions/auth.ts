@@ -3,46 +3,85 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { db } from "../db";
-import { getCurrentUser, type ThemeAccent, type UserRole } from "../auth";
-import { logActivity } from "../activity";
-import { createNotification } from "../notifications";
 import {
-  type ActionResponse,
   USER_SESSION_COOKIE_NAME,
   ORG_SESSION_COOKIE_NAME,
   THEME_ACCENT_COOKIE_NAME,
-} from "./common";
+  THEME_MODE_COOKIE_NAME,
+  getCurrentUser,
+  type ThemeAccent,
+  type ThemeMode,
+  type UserRole,
+} from "../auth";
+import { logActivity } from "../activity";
+import type { ActionResponse } from "./common";
 
-export async function switchActiveUserAction(userId: string): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.set(USER_SESSION_COOKIE_NAME, userId, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-  });
-  revalidatePath("/devflow-saas", "layout");
+export async function switchActiveUserAction(
+  userId: string,
+): Promise<ActionResponse> {
+  try {
+    const cookieStore = await cookies();
+    cookieStore.set(USER_SESSION_COOKIE_NAME, userId, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      sameSite: "lax",
+    });
+    revalidatePath("/devflow-saas");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to switch user" };
+  }
 }
 
-export async function switchActiveOrgAction(orgId: string): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.set(ORG_SESSION_COOKIE_NAME, orgId, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-  });
-  revalidatePath("/devflow-saas", "layout");
+export async function switchActiveOrgAction(
+  orgId: string,
+): Promise<ActionResponse> {
+  try {
+    const cookieStore = await cookies();
+    cookieStore.set(ORG_SESSION_COOKIE_NAME, orgId, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      sameSite: "lax",
+    });
+    revalidatePath("/devflow-saas");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to switch workspace" };
+  }
 }
 
 export async function switchAccentColorAction(
   accent: ThemeAccent,
-): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.set(THEME_ACCENT_COOKIE_NAME, accent, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-  });
-  revalidatePath("/devflow-saas", "layout");
+): Promise<ActionResponse> {
+  try {
+    const cookieStore = await cookies();
+    cookieStore.set(THEME_ACCENT_COOKIE_NAME, accent, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+      sameSite: "lax",
+    });
+    revalidatePath("/devflow-saas");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to update theme accent" };
+  }
+}
+
+export async function setThemeModeAction(
+  mode: ThemeMode,
+): Promise<ActionResponse> {
+  try {
+    const cookieStore = await cookies();
+    cookieStore.set(THEME_MODE_COOKIE_NAME, mode, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+      sameSite: "lax",
+    });
+    revalidatePath("/devflow-saas");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Failed to update theme mode" };
+  }
 }
 
 export async function updateUserRoleAction(
@@ -50,27 +89,24 @@ export async function updateUserRoleAction(
   newRole: UserRole,
 ): Promise<ActionResponse> {
   const currentUser = await getCurrentUser();
-  const cookieStore = await cookies();
-  const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
-
   if (currentUser.role !== "Admin") {
-    return {
-      success: false,
-      error: "Only workspace Admins can modify member roles.",
-    };
+    return { success: false, error: "Only Admins can change user roles." };
   }
 
   try {
-    const userStmt = db.prepare(
-      "SELECT name, role FROM devflow_users WHERE id = ?",
-    );
+    const userStmt = db.prepare("SELECT name FROM devflow_users WHERE id = ?");
     const targetUser = userStmt.get(targetUserId) as
-      | { name: string; role: string }
+      | { name: string }
       | undefined;
-    if (!targetUser) return { success: false, error: "Target user not found." };
+    if (!targetUser) return { success: false, error: "User not found." };
 
-    const stmt = db.prepare("UPDATE devflow_users SET role = ? WHERE id = ?");
-    stmt.run(newRole, targetUserId);
+    db.prepare("UPDATE devflow_users SET role = ? WHERE id = ?").run(
+      newRole,
+      targetUserId,
+    );
+
+    const cookieStore = await cookies();
+    const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
 
     logActivity(
       orgId,
@@ -78,26 +114,13 @@ export async function updateUserRoleAction(
       currentUser.name,
       "updated_user",
       targetUser.name,
-      `Changed role from ${targetUser.role} to ${newRole}.`,
+      `Changed role to "${newRole}".`,
     );
 
-    createNotification(
-      targetUserId,
-      orgId,
-      "Role Updated",
-      `Your workspace role was changed to ${newRole} by ${currentUser.name}.`,
-      "system",
-      "/devflow-saas/team",
-    );
-
-    revalidatePath("/devflow-saas/team");
-    revalidatePath("/devflow-saas", "layout");
+    revalidatePath("/devflow-saas");
     return { success: true };
   } catch {
-    return {
-      success: false,
-      error: "Failed to update member role in database.",
-    };
+    return { success: false, error: "Failed to update user role." };
   }
 }
 
@@ -105,31 +128,43 @@ export async function inviteTeamMemberAction(
   formData: FormData,
 ): Promise<ActionResponse> {
   const currentUser = await getCurrentUser();
-  const cookieStore = await cookies();
-  const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
-
   if (currentUser.role !== "Admin") {
     return {
       success: false,
-      error: "Only workspace Admins can invite new team members.",
+      error: "Only Admins can invite new team members.",
     };
   }
 
   const name = (formData.get("name") as string | null)?.trim();
   const email = (formData.get("email") as string | null)?.trim().toLowerCase();
-  const role = (formData.get("role") as UserRole | null) || "Member";
+  const role = ((formData.get("role") as string | null)?.trim() ||
+    "Member") as UserRole;
 
   if (!name || !email) {
     return { success: false, error: "Name and email are required." };
   }
 
   try {
-    const id = `user-${Date.now()}`;
-    const stmt = db.prepare(`
+    const existing = db
+      .prepare("SELECT id FROM devflow_users WHERE email = ?")
+      .get(email);
+    if (existing) {
+      return {
+        success: false,
+        error: "A user with this email address already exists.",
+      };
+    }
+
+    const id = `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    db.prepare(
+      `
       INSERT INTO devflow_users (id, name, email, role)
       VALUES (?, ?, ?, ?)
-    `);
-    stmt.run(id, name, email, role);
+    `,
+    ).run(id, name, email, role);
+
+    const cookieStore = await cookies();
+    const orgId = cookieStore.get(ORG_SESSION_COOKIE_NAME)?.value || "org-1";
 
     logActivity(
       orgId,
@@ -137,22 +172,17 @@ export async function inviteTeamMemberAction(
       currentUser.name,
       "invited_user",
       name,
-      `Invited ${name} (${email}) as ${role}.`,
+      `Invited ${name} (${email}) with role "${role}".`,
     );
 
-    revalidatePath("/devflow-saas/team");
-    revalidatePath("/devflow-saas", "layout");
+    revalidatePath("/devflow-saas");
     return { success: true };
-  } catch (err: unknown) {
-    if (
-      err instanceof Error &&
-      err.message.includes("UNIQUE constraint failed")
-    ) {
-      return {
-        success: false,
-        error: `A team member with email "${email}" already exists.`,
-      };
-    }
-    return { success: false, error: "Failed to add team member to database." };
+  } catch {
+    return { success: false, error: "Failed to invite team member." };
   }
 }
+
+// Aliases for convenience
+export const switchUserAction = switchActiveUserAction;
+export const switchOrgAction = switchActiveOrgAction;
+export const setThemeAccentAction = switchAccentColorAction;

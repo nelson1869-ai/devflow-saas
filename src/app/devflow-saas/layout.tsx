@@ -6,7 +6,9 @@ import {
   getCurrentOrg,
   getAllOrgs,
   getThemeAccent,
+  getThemeMode,
   type ThemeAccent,
+  type ThemeMode,
 } from "./lib/auth";
 import { getProjectsByOrgId } from "./lib/queries";
 import { getNotificationsForUser } from "./lib/notifications";
@@ -15,6 +17,7 @@ import { UserMenu } from "./components/UserMenu";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
 import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { ThemeAccentPicker } from "./components/ThemeAccentPicker";
+import { ThemeModePicker } from "./components/ThemeModePicker";
 import { NotificationBell } from "./components/NotificationBell";
 
 type DevFlowLayoutProps = Readonly<{
@@ -33,14 +36,21 @@ const accentPalettes: Record<
 };
 
 export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
-  const [currentUser, allUsers, currentOrg, allOrgs, currentAccent] =
-    await Promise.all([
-      getCurrentUser(),
-      getAllUsers(),
-      getCurrentOrg(),
-      getAllOrgs(),
-      getThemeAccent(),
-    ]);
+  const [
+    currentUser,
+    allUsers,
+    currentOrg,
+    allOrgs,
+    currentAccent,
+    currentMode,
+  ] = await Promise.all([
+    getCurrentUser(),
+    getAllUsers(),
+    getCurrentOrg(),
+    getAllOrgs(),
+    getThemeAccent(),
+    getThemeMode(),
+  ]);
 
   const [projects, notifications] = await Promise.all([
     getProjectsByOrgId(currentOrg.id),
@@ -52,9 +62,10 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
   return (
     <div
       data-accent={currentAccent}
-      className="min-h-screen bg-slate-950 text-slate-100 antialiased selection:bg-cyan-500 selection:text-white font-sans"
+      data-theme-mode={currentMode}
+      className="min-h-screen bg-slate-950 text-slate-100 antialiased selection:bg-cyan-500 selection:text-white font-sans transition-colors duration-200"
     >
-      {/* Dynamic Global Theme Accent CSS Variables */}
+      {/* Dynamic Multi-Theme & Accent CSS Variables */}
       <style>{`
         :root {
           --accent-hex: ${palette.hex};
@@ -79,6 +90,61 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
         }
         .focus-visible\\:outline-cyan-400:focus-visible {
           outline-color: var(--accent-hex) !important;
+        }
+
+        /* Light Mode Styles */
+        [data-theme-mode="light"] {
+          background-color: #f8fafc !important;
+          color: #0f172a !important;
+        }
+        [data-theme-mode="light"] header {
+          background-color: rgba(255, 255, 255, 0.88) !important;
+          border-color: #e2e8f0 !important;
+        }
+        [data-theme-mode="light"] .bg-slate-950,
+        [data-theme-mode="light"] .bg-slate-950\\/60,
+        [data-theme-mode="light"] .bg-slate-950\\/70,
+        [data-theme-mode="light"] .bg-slate-950\\/80 {
+          background-color: #ffffff !important;
+        }
+        [data-theme-mode="light"] .bg-slate-900,
+        [data-theme-mode="light"] .bg-slate-900\\/60,
+        [data-theme-mode="light"] .bg-slate-900\\/70,
+        [data-theme-mode="light"] .bg-slate-900\\/80 {
+          background-color: #f1f5f9 !important;
+        }
+        [data-theme-mode="light"] .border-slate-800,
+        [data-theme-mode="light"] .border-slate-800\\/80,
+        [data-theme-mode="light"] .border-slate-900 {
+          border-color: #e2e8f0 !important;
+        }
+        [data-theme-mode="light"] .text-slate-100,
+        [data-theme-mode="light"] .text-white {
+          color: #0f172a !important;
+        }
+        [data-theme-mode="light"] .text-slate-300,
+        [data-theme-mode="light"] .text-slate-400 {
+          color: #475569 !important;
+        }
+
+        /* High Contrast Mode Styles */
+        [data-theme-mode="high-contrast"] {
+          background-color: #000000 !important;
+          color: #ffffff !important;
+        }
+        [data-theme-mode="high-contrast"] header {
+          background-color: #000000 !important;
+          border-color: #ffffff !important;
+        }
+        [data-theme-mode="high-contrast"] .bg-slate-950,
+        [data-theme-mode="high-contrast"] .bg-slate-900 {
+          background-color: #000000 !important;
+          border: 1px solid #ffffff !important;
+        }
+        [data-theme-mode="high-contrast"] .text-slate-300,
+        [data-theme-mode="high-contrast"] .text-slate-400,
+        [data-theme-mode="high-contrast"] .text-slate-500 {
+          color: #f8fafc !important;
         }
       `}</style>
 
@@ -194,6 +260,9 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
 
             {/* Notification Bell Drawer (🔔) */}
             <NotificationBell notifications={notifications} />
+
+            {/* Theme Mode Picker (🌙 Dark / ☀️ Light / 👁️ High Contrast / 💻 System) */}
+            <ThemeModePicker currentMode={currentMode} />
 
             {/* User Theme Accent Color Picker */}
             <ThemeAccentPicker currentAccent={currentAccent} />

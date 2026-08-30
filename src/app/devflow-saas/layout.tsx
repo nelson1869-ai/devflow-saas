@@ -8,7 +8,6 @@ import {
   getThemeAccent,
   getThemeMode,
   type ThemeAccent,
-  type ThemeMode,
 } from "./lib/auth";
 import { getProjectsByOrgId } from "./lib/queries";
 import { getNotificationsForUser } from "./lib/notifications";
@@ -20,6 +19,7 @@ import { ThemeAccentPicker } from "./components/ThemeAccentPicker";
 import { ThemeModePicker } from "./components/ThemeModePicker";
 import { NotificationBell } from "./components/NotificationBell";
 import { NavSettingsDropdown } from "./components/NavSettingsDropdown";
+import { MobileNavDrawer } from "./components/MobileNavDrawer";
 
 type DevFlowLayoutProps = Readonly<{
   children: ReactNode;
@@ -151,8 +151,11 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
 
       {/* SaaS App Header */}
       <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3 sm:px-8">
-          <div className="flex items-center gap-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-8">
+          <div className="flex items-center gap-3 sm:gap-8">
+            {/* Mobile Hamburger Navigation Drawer */}
+            <MobileNavDrawer />
+
             <Link
               href="/devflow-saas"
               className="flex shrink-0 items-center gap-2 text-base font-bold tracking-tight text-white transition hover:opacity-80 focus-visible:outline-2 focus-visible:outline-cyan-400"
@@ -166,7 +169,7 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
               >
                 DF
               </span>
-              <span>DevFlow</span>
+              <span className="hidden sm:inline">DevFlow</span>
             </Link>
 
             <nav
@@ -209,7 +212,7 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
             </nav>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2.5">
             {/* Global Command Palette (⌘K) */}
             <CommandPalette
               projects={projects}
@@ -217,17 +220,23 @@ export default async function DevFlowLayout({ children }: DevFlowLayoutProps) {
               allUsers={allUsers}
             />
 
-            {/* Keyboard Shortcuts Helper (?) */}
-            <KeyboardShortcutsModal />
+            {/* Keyboard Shortcuts Helper (?) - Desktop only */}
+            <div className="hidden md:block">
+              <KeyboardShortcutsModal />
+            </div>
 
             {/* Notification Bell Drawer (🔔) */}
             <NotificationBell notifications={notifications} />
 
-            {/* Theme Mode Picker (🌙 Dark / ☀️ Light / 👁️ High Contrast / 💻 System) */}
-            <ThemeModePicker currentMode={currentMode} />
+            {/* Theme Mode Picker - Desktop only */}
+            <div className="hidden sm:block">
+              <ThemeModePicker currentMode={currentMode} />
+            </div>
 
-            {/* User Theme Accent Color Picker */}
-            <ThemeAccentPicker currentAccent={currentAccent} />
+            {/* User Theme Accent Color Picker - Desktop only */}
+            <div className="hidden sm:block">
+              <ThemeAccentPicker currentAccent={currentAccent} />
+            </div>
 
             {/* Multi-Tenant Workspace Switcher */}
             <WorkspaceMenu currentOrg={currentOrg} allOrgs={allOrgs} />

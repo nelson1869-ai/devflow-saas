@@ -160,6 +160,7 @@ export function ProjectTasksView({
   const [assigneeName, setAssigneeName] = useState(currentUser.name);
   const [formError, setFormError] = useState<string | null>(null);
   const [isCreateAiModalOpen, setIsCreateAiModalOpen] = useState(false);
+
   // React 19 Render-time state synchronizations (zero cascading renders)
   if (initialTasks !== prevInitialTasks) {
     setPrevInitialTasks(initialTasks);
@@ -373,15 +374,6 @@ export function ProjectTasksView({
         setTasks(initialTasks);
       }
     });
-  };
-
-  const handleUpdateDescriptionDirectly = (
-    taskId: string,
-    newDescription: string,
-  ) => {
-    const target = tasks.find((t) => t.id === taskId);
-    if (!target) return;
-    handleSaveTask({ ...target, description: newDescription });
   };
 
   const handleAddComment = (content: string, targetTaskId?: string) => {
@@ -813,14 +805,14 @@ export function ProjectTasksView({
         </div>
       </div>
 
-      {/* Saved Filter Preset Tabs Strip (Phase 64) */}
-      <div className="flex flex-wrap items-center gap-2 overflow-x-auto pb-1">
+      {/* Saved Filter Preset Tabs Strip (Scrollable Chips on Mobile) */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
         {/* System Preset 1: All Tasks */}
         <button
           type="button"
           onClick={() => handleSelectPresetTab("all")}
           className={[
-            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+            "shrink-0 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
             activePresetTab === "all"
               ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shadow-sm"
               : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
@@ -838,7 +830,7 @@ export function ProjectTasksView({
           type="button"
           onClick={() => handleSelectPresetTab("my-tasks")}
           className={[
-            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+            "shrink-0 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
             activePresetTab === "my-tasks"
               ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shadow-sm"
               : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
@@ -856,7 +848,7 @@ export function ProjectTasksView({
           type="button"
           onClick={() => handleSelectPresetTab("urgent")}
           className={[
-            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+            "shrink-0 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
             activePresetTab === "urgent"
               ? "bg-rose-500/20 text-rose-300 ring-1 ring-rose-500/40 shadow-sm"
               : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
@@ -874,7 +866,7 @@ export function ProjectTasksView({
           type="button"
           onClick={() => handleSelectPresetTab("in-flight")}
           className={[
-            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+            "shrink-0 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
             activePresetTab === "in-flight"
               ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40 shadow-sm"
               : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
@@ -894,7 +886,7 @@ export function ProjectTasksView({
             type="button"
             onClick={() => handleSelectPresetTab(view.id)}
             className={[
-              "group inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+              "shrink-0 group inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
               activePresetTab === view.id
                 ? "bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40 shadow-sm"
                 : "border border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200",
@@ -917,7 +909,7 @@ export function ProjectTasksView({
           type="button"
           onClick={() => setIsSaveModalOpen(true)}
           title="Save active filter criteria as a custom tab"
-          className="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-700 bg-slate-950/40 px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:border-cyan-400 hover:text-cyan-300 transition"
+          className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-700 bg-slate-950/40 px-2.5 py-1.5 text-xs font-medium text-slate-400 hover:border-cyan-400 hover:text-cyan-300 transition"
         >
           <span>💾</span>
           <span>Save View</span>
@@ -925,7 +917,7 @@ export function ProjectTasksView({
       </div>
 
       {/* Advanced Filter & Sort Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
+      <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
         {/* Select All Filtered Checkbox Button */}
         {filteredTasks.length > 0 && (
           <button

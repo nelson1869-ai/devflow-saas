@@ -4,7 +4,7 @@ import { useState, useTransition, type FormEvent } from "react";
 import type { Project, ProjectStatus, FilterOption } from "./types";
 import { ProjectCard } from "./ProjectCard";
 import { ProjectMetrics } from "./ProjectMetrics";
-import { createProjectAction } from "../lib/actions";
+import { createProjectAction, deleteProjectAction } from "../lib/actions";
 
 type ProjectsViewProps = Readonly<{
   initialProjects: readonly Project[];
@@ -78,17 +78,33 @@ export function ProjectsView({ initialProjects }: ProjectsViewProps) {
       const res = await createProjectAction(formData);
       if (!res.success) {
         setFormError(res.error || "Failed to create project.");
-        // Rollback optimistic update
         setProjects((prev) =>
           prev.filter((p) => p.id !== optimisticProject.id),
         );
       } else {
-        // Reset Form
         setName("");
         setKey("");
         setDescription("");
         setStatus("Active");
         setIsFormOpen(false);
+      }
+    });
+  };
+
+  const handleDeleteProject = (projectId: string) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this project? All associated tasks in SQLite will also be deleted.",
+    );
+    if (!confirmed) return;
+
+    // Optimistic UI removal
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+
+    startTransition(async () => {
+      const res = await deleteProjectAction(projectId);
+      if (!res.success) {
+        alert(res.error || "Failed to delete project.");
+        setProjects(initialProjects);
       }
     });
   };
@@ -345,7 +361,11 @@ export function ProjectsView({ initialProjects }: ProjectsViewProps) {
           ) : (
             <ul className="grid gap-6 md:grid-cols-3">
               {filteredProjects.map((project) => (
-                <ProjectCard key={project.id} project={project} />
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onDelete={handleDeleteProject}
+                />
               ))}
             </ul>
           )}

@@ -3,7 +3,11 @@
 import { useState, useTransition } from "react";
 import type { Task, TaskPriority, TaskStatus } from "../../tasks/types";
 import { TaskCard } from "../../tasks/TaskCard";
-import { createTaskAction, updateTaskStatusAction } from "../../lib/actions";
+import {
+  createTaskAction,
+  updateTaskStatusAction,
+  deleteTaskAction,
+} from "../../lib/actions";
 
 type ProjectTasksViewProps = Readonly<{
   projectId: string;
@@ -121,7 +125,7 @@ export function ProjectTasksView({
   };
 
   const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
-    // Instant optimistic update in UI
+    // Instant optimistic update
     setTasks((prev) =>
       prev.map((task) =>
         task.id === taskId ? { ...task, status: newStatus } : task,
@@ -131,7 +135,24 @@ export function ProjectTasksView({
     startTransition(async () => {
       const res = await updateTaskStatusAction(taskId, newStatus, projectId);
       if (!res.success) {
-        // Rollback on failure
+        setTasks(initialTasks);
+      }
+    });
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this task?",
+    );
+    if (!confirmed) return;
+
+    // Optimistic removal from UI
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+
+    startTransition(async () => {
+      const res = await deleteTaskAction(taskId, projectId);
+      if (!res.success) {
+        alert(res.error || "Failed to delete task.");
         setTasks(initialTasks);
       }
     });
@@ -403,6 +424,7 @@ export function ProjectTasksView({
                           key={task.id}
                           task={task}
                           onStatusChange={handleStatusChange}
+                          onDelete={handleDeleteTask}
                         />
                       ))}
                     </ul>
@@ -426,6 +448,7 @@ export function ProjectTasksView({
               key={task.id}
               task={task}
               onStatusChange={handleStatusChange}
+              onDelete={handleDeleteTask}
             />
           ))}
         </ul>
